@@ -1,0 +1,5 @@
+# MediaPipe binary assets — download locally with setup.sh / setup.ps1
+mediapipe/
+
+# Claude internal
+.claude/

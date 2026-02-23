@@ -1,0 +1,1021 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WebGazer Eye Tracking Demo</title>
+  <script src="https://webgazer.cs.brown.edu/webgazer.js"></script>
+  <script src="/mediapipe/face_mesh/face_mesh.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: #0d1117;
+      color: #e6edf3;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ── Gaze cursor ─────────────────────────────────────────── */
+    #gaze-dot {
+      position: fixed;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: rgba(88, 166, 255, 0.55);
+      border: 2px solid rgba(88, 166, 255, 0.9);
+      box-shadow: 0 0 16px rgba(88, 166, 255, 0.8);
+      pointer-events: none;
+      transform: translate(-50%, -50%);
+      z-index: 8000;
+      display: none;
+    }
+    #gaze-dot.active { display: block; }
+
+    /* ── Calibration overlay ─────────────────────────────────── */
+    #cal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(13, 17, 23, 0.92);
+      z-index: 9000;
+      display: none;
+    }
+    #cal-overlay.show { display: block; }
+
+    #cal-info {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+      pointer-events: none;
+    }
+    #cal-info h2 { font-size: 1.4rem; color: #58a6ff; margin-bottom: 8px; }
+    #cal-info p  { font-size: 0.9rem; color: #8b949e; margin-bottom: 12px; }
+    #cal-info .progress-text { font-size: 1rem; color: #e6edf3; }
+
+    .cal-dot {
+      position: absolute;
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      cursor: pointer;
+      border: 3px solid #58a6ff;
+      background: rgba(88, 166, 255, 0.15);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.7rem;
+      font-weight: 700;
+      color: #58a6ff;
+      transition: background 0.2s, transform 0.15s;
+      user-select: none;
+    }
+    .cal-dot:hover   { background: rgba(88, 166, 255, 0.3); }
+    .cal-dot.done    { border-color: #3fb950; background: rgba(63,185,80,.3); color: #3fb950; transform: translate(-50%,-50%) scale(0.85); pointer-events: none; }
+    .cal-dot.active-dot { border-color: #f0c000; background: rgba(240,192,0,.2); color: #f0c000; animation: cal-pulse 0.8s infinite; }
+    @keyframes cal-pulse {
+      0%,100% { transform: translate(-50%,-50%) scale(1); }
+      50%      { transform: translate(-50%,-50%) scale(1.2); }
+    }
+
+    /* Progress bar inside each cal dot */
+    .cal-dot svg {
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%,-50%);
+      width: 44px; height: 44px;
+    }
+    .cal-dot svg circle {
+      fill: none;
+      stroke: #f0c000;
+      stroke-width: 3;
+      stroke-dasharray: 113;
+      stroke-dashoffset: 113;
+      transform: rotate(-90deg);
+      transform-origin: 50% 50%;
+      transition: stroke-dashoffset 0.2s;
+    }
+
+    /* ── WebGazer video feed ─────────────────────────────────── */
+    #webgazerVideoFeed,
+    #webgazerVideoCanvas,
+    #webgazerFaceOverlay,
+    #webgazerFaceFeedbackBox {
+      position: fixed !important;
+      bottom: 16px !important;
+      right: 16px !important;
+      top: auto !important;
+      left: auto !important;
+      width: 160px !important;
+      height: 120px !important;
+      border-radius: 10px !important;
+      border: 1px solid #30363d !important;
+      z-index: 7000 !important;
+    }
+
+    /* ── Layout ──────────────────────────────────────────────── */
+    header {
+      padding: 22px 40px;
+      border-bottom: 1px solid #21262d;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    header h1 { font-size: 1.3rem; font-weight: 600; color: #58a6ff; }
+    header span { font-size: 0.85rem; color: #8b949e; }
+
+    .container { max-width: 1100px; margin: 0 auto; padding: 32px 40px; }
+
+    /* ── Status bar ──────────────────────────────────────────── */
+    .status-bar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 28px;
+      background: #161b22;
+      border: 1px solid #21262d;
+      border-radius: 10px;
+      padding: 14px 20px;
+      flex-wrap: wrap;
+    }
+
+    .status-indicator {
+      width: 12px; height: 12px;
+      border-radius: 50%;
+      background: #484f58;
+      flex-shrink: 0;
+      transition: background 0.3s;
+    }
+    .status-indicator.idle   { background: #484f58; }
+    .status-indicator.active { background: #3fb950; box-shadow: 0 0 8px #3fb950; animation: pulse 1.5s infinite; }
+    .status-indicator.paused { background: #d2a100; }
+    .status-indicator.error  { background: #f85149; }
+
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+    #status-text { flex: 1; font-size: 0.88rem; color: #8b949e; min-width: 160px; }
+
+    .btn-group { display: flex; gap: 8px; flex-wrap: wrap; }
+
+    .btn {
+      padding: 9px 18px;
+      border-radius: 8px;
+      border: none;
+      font-size: 0.84rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.2s, transform 0.1s;
+      white-space: nowrap;
+    }
+    .btn:active { transform: scale(0.97); }
+    .btn:disabled { opacity: 0.35; cursor: not-allowed; }
+    .btn-start { background: #238636; color: #fff; }
+    .btn-start:hover:not(:disabled) { background: #2ea043; }
+    .btn-pause { background: #21262d; color: #d2a100; border: 1px solid #d2a100; }
+    .btn-pause:hover:not(:disabled) { background: rgba(210,160,0,.1); }
+    .btn-recal { background: #21262d; color: #58a6ff; border: 1px solid #58a6ff; }
+    .btn-recal:hover:not(:disabled) { background: rgba(88,166,255,.1); }
+    .btn-clear { background: #21262d; color: #8b949e; border: 1px solid #30363d; }
+    .btn-clear:hover:not(:disabled) { background: #30363d; }
+    .btn-stop  { background: #21262d; color: #f85149; border: 1px solid #f85149; }
+    .btn-stop:hover:not(:disabled) { background: rgba(248,81,73,.1); }
+
+    /* ── Grid ────────────────────────────────────────────────── */
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      margin-bottom: 24px;
+    }
+    @media (max-width: 700px) { .grid { grid-template-columns: 1fr; } }
+
+    .card {
+      background: #161b22;
+      border: 1px solid #21262d;
+      border-radius: 10px;
+      padding: 18px 22px;
+    }
+    .card h2 {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: #8b949e;
+      margin-bottom: 14px;
+    }
+
+    /* ── Coordinates ─────────────────────────────────────────── */
+    .coord-display { display: flex; gap: 24px; }
+    .coord-item label { display: block; font-size: 0.72rem; color: #8b949e; margin-bottom: 4px; }
+    .coord-item .value {
+      font-size: 2rem; font-weight: 700;
+      color: #58a6ff;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* ── State badge ─────────────────────────────────────────── */
+    #tracking-state {
+      display: inline-block;
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      background: #21262d;
+      color: #8b949e;
+    }
+    #tracking-state.valid   { background: rgba(63,185,80,.15); color: #3fb950; }
+    #tracking-state.lost    { background: rgba(248,81,73,.15); color: #f85149; }
+    #tracking-state.paused  { background: rgba(210,160,0,.15); color: #d2a100; }
+
+    /* ── Calibration hint ────────────────────────────────────── */
+    .cal-hint {
+      margin-top: 12px;
+      font-size: 0.78rem;
+      color: #8b949e;
+      line-height: 1.6;
+    }
+    .cal-hint span { color: #58a6ff; cursor: pointer; text-decoration: underline; }
+
+    /* ── Targets ─────────────────────────────────────────────── */
+    .playground {
+      background: #161b22;
+      border: 1px solid #21262d;
+      border-radius: 10px;
+      padding: 18px 22px;
+      margin-bottom: 24px;
+    }
+    .playground h2 {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: #8b949e;
+      margin-bottom: 8px;
+    }
+    .playground p { font-size: 0.84rem; color: #8b949e; margin-bottom: 18px; }
+
+    .targets {
+      display: flex;
+      justify-content: space-around;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 20px;
+      padding: 16px 0;
+    }
+    .target {
+      width: 80px; height: 80px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.6rem;
+      border: 2px solid transparent;
+      transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
+      user-select: none;
+    }
+    .target.gazed { transform: scale(1.25); box-shadow: 0 0 24px currentColor; border-color: currentColor; }
+    .t1 { background: rgba(88,166,255,.15); color: #58a6ff; }
+    .t2 { background: rgba(63,185,80,.15);  color: #3fb950; }
+    .t3 { background: rgba(210,153,34,.15); color: #d2a100; }
+    .t4 { background: rgba(248,81,73,.15);  color: #f85149; }
+    .t5 { background: rgba(188,140,255,.15);color: #bc8cff; }
+
+    /* ── Heatmap ─────────────────────────────────────────────── */
+    .heatmap-section {
+      background: #161b22;
+      border: 1px solid #21262d;
+      border-radius: 10px;
+      padding: 18px 22px;
+      margin-bottom: 24px;
+    }
+    .heatmap-section h2 {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: #8b949e;
+      margin-bottom: 6px;
+    }
+    .heatmap-section p { font-size: 0.84rem; color: #8b949e; margin-bottom: 14px; }
+    #heatmap-canvas {
+      width: 100%; height: 200px;
+      border-radius: 8px;
+      background: #0d1117;
+      display: block;
+    }
+    .heatmap-controls { margin-top: 10px; }
+    .btn-sm {
+      padding: 5px 14px;
+      font-size: 0.78rem;
+      border-radius: 6px;
+      border: 1px solid #30363d;
+      background: #21262d;
+      color: #e6edf3;
+      cursor: pointer;
+    }
+    .btn-sm:hover { background: #30363d; }
+
+    /* ── Pupil / iris display ────────────────────────────────── */
+    .pupil-section {
+      background: #161b22;
+      border: 1px solid #21262d;
+      border-radius: 10px;
+      padding: 18px 22px;
+      margin-bottom: 24px;
+    }
+    .pupil-section h2 {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: #8b949e;
+      margin-bottom: 14px;
+    }
+    .pupil-row-group { display: flex; gap: 40px; margin-bottom: 16px; }
+    .pupil-row { display: flex; align-items: baseline; gap: 6px; }
+    .eye-label { font-size: 0.78rem; color: #8b949e; width: 38px; }
+    .pupil-value {
+      font-size: 2rem; font-weight: 700;
+      color: #58a6ff;
+      font-variant-numeric: tabular-nums;
+      min-width: 60px;
+    }
+    .unit { font-size: 0.8rem; color: #8b949e; }
+    .gauge-label { font-size: 0.72rem; color: #8b949e; margin-bottom: 4px; }
+    .gauge-track {
+      height: 10px;
+      background: #21262d;
+      border-radius: 5px;
+      overflow: hidden;
+      margin-bottom: 4px;
+    }
+    .gauge-fill {
+      height: 100%;
+      width: 0;
+      border-radius: 5px;
+      background: #3fb950;
+      transition: width 0.25s ease, background 0.25s ease;
+    }
+    .gauge-range { display: flex; justify-content: space-between; font-size: 0.68rem; color: #484f58; }
+    .pupil-note { font-size: 0.72rem; color: #484f58; margin-top: 10px; line-height: 1.5; }
+
+    /* ── EAR / eye openness display ─────────────────────────── */
+    .ear-section {
+      background: #161b22;
+      border: 1px solid #21262d;
+      border-radius: 10px;
+      padding: 18px 22px;
+      margin-bottom: 24px;
+    }
+    .ear-section h2 {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: #8b949e;
+      margin-bottom: 14px;
+    }
+    .ear-row-group { display: flex; gap: 40px; margin-bottom: 16px; align-items: flex-start; }
+    .ear-row { display: flex; align-items: baseline; gap: 6px; }
+    .ear-value {
+      font-size: 2rem; font-weight: 700;
+      color: #58a6ff;
+      font-variant-numeric: tabular-nums;
+      min-width: 60px;
+    }
+    .eye-status {
+      display: inline-block;
+      padding: 5px 14px;
+      border-radius: 20px;
+      font-size: 0.9rem;
+      font-weight: 700;
+      background: #21262d;
+      color: #8b949e;
+      margin-left: 8px;
+      transition: background 0.15s, color 0.15s;
+    }
+    .eye-status.open      { background: rgba(63,185,80,.2);  color: #3fb950; }
+    .eye-status.squinting { background: rgba(210,160,0,.2);  color: #d2a100; }
+    .eye-status.closed    { background: rgba(248,81,73,.2);  color: #f85149; }
+    .eye-status.blink     { background: rgba(88,166,255,.25); color: #58a6ff; animation: blink-flash 0.3s ease; }
+    @keyframes blink-flash { 0%{transform:scale(1)} 50%{transform:scale(1.15)} 100%{transform:scale(1)} }
+
+    .blink-counter {
+      display: flex; align-items: center; gap: 10px;
+      margin-top: 4px;
+    }
+    .blink-count-val {
+      font-size: 1.8rem; font-weight: 700;
+      color: #58a6ff;
+      font-variant-numeric: tabular-nums;
+    }
+    .blink-count-label { font-size: 0.78rem; color: #8b949e; }
+
+    /* ── Event log ───────────────────────────────────────────── */
+    .log-section {
+      background: #161b22;
+      border: 1px solid #21262d;
+      border-radius: 10px;
+      padding: 18px 22px;
+    }
+    .log-section h2 {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: #8b949e;
+      margin-bottom: 10px;
+    }
+    #event-log {
+      list-style: none;
+      max-height: 160px;
+      overflow-y: auto;
+      font-size: 0.8rem;
+      font-family: 'Consolas', monospace;
+    }
+    #event-log li { padding: 3px 0; border-bottom: 1px solid #21262d; }
+    #event-log li .ts  { color: #3fb950; margin-right: 8px; }
+    #event-log li .msg { color: #e6edf3; }
+    #event-log li .err { color: #f85149; }
+  </style>
+</head>
+<body>
+
+<!-- Gaze dot -->
+<div id="gaze-dot"></div>
+
+<!-- Calibration overlay -->
+<div id="cal-overlay">
+  <div id="cal-info">
+    <h2>Calibration</h2>
+    <p>Look at the <strong style="color:#f0c000">yellow dot</strong> and click it — repeat until it turns green</p>
+    <div class="progress-text">Point <span id="cal-current">1</span> of 9</div>
+  </div>
+</div>
+
+<header>
+  <h1>WebGazer Eye Tracking Demo</h1>
+  <span>powered by WebGazer.js — open source, no quota</span>
+</header>
+
+<div class="container">
+
+  <!-- Status bar -->
+  <div class="status-bar">
+    <div class="status-indicator idle" id="status-indicator"></div>
+    <span id="status-text">Click "Start Tracking" — camera access will be requested.</span>
+    <div class="btn-group">
+      <button class="btn btn-start" id="btn-start"  onclick="startTracking()">Start Tracking</button>
+      <button class="btn btn-pause" id="btn-pause"  onclick="togglePause()" disabled>Pause</button>
+      <button class="btn btn-recal" id="btn-recal"  onclick="showCalibration()" disabled>Recalibrate</button>
+      <button class="btn btn-clear" id="btn-clear"  onclick="clearCalData()" disabled>Clear Data</button>
+      <button class="btn btn-stop"  id="btn-stop"   onclick="stopTracking()" disabled>Stop</button>
+    </div>
+  </div>
+
+  <!-- Coordinates + state -->
+  <div class="grid">
+    <div class="card">
+      <h2>Gaze Position (viewport px)</h2>
+      <div class="coord-display">
+        <div class="coord-item">
+          <label>X</label>
+          <div class="value" id="coord-x">—</div>
+        </div>
+        <div class="coord-item">
+          <label>Y</label>
+          <div class="value" id="coord-y">—</div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Tracking State</h2>
+      <div id="tracking-state">Not started</div>
+      <div class="cal-hint">
+        Accuracy improves with more calibration clicks.<br>
+        After stopping, calibration data is saved locally (IndexedDB).
+      </div>
+    </div>
+  </div>
+
+  <!-- Target playground -->
+  <div class="playground">
+    <h2>Gaze Targets</h2>
+    <p>Look at the circles — they react when your gaze lands on them.</p>
+    <div class="targets">
+      <div class="target t1">⭐</div>
+      <div class="target t2">🌲</div>
+      <div class="target t3">☀️</div>
+      <div class="target t4">🔥</div>
+      <div class="target t5">🌙</div>
+    </div>
+  </div>
+
+  <!-- Heatmap -->
+  <div class="heatmap-section">
+    <h2>Gaze Heatmap</h2>
+    <p>Real-time accumulation of where your gaze has been on this page.</p>
+    <canvas id="heatmap-canvas"></canvas>
+    <div class="heatmap-controls">
+      <button class="btn-sm" onclick="clearHeatmap()">Clear Heatmap</button>
+    </div>
+  </div>
+
+  <!-- Pupil / iris diameter -->
+  <div class="pupil-section">
+    <h2>Iris / Pupil Diameter Estimate</h2>
+    <div class="pupil-row-group">
+      <div class="pupil-row">
+        <span class="eye-label">Left</span>
+        <span class="pupil-value" id="pupil-left">—</span>
+        <span class="unit">mm</span>
+      </div>
+      <div class="pupil-row">
+        <span class="eye-label">Right</span>
+        <span class="pupil-value" id="pupil-right">—</span>
+        <span class="unit">mm</span>
+      </div>
+      <div class="pupil-row">
+        <span class="eye-label">Avg</span>
+        <span class="pupil-value" id="pupil-avg">—</span>
+        <span class="unit">mm</span>
+      </div>
+    </div>
+    <div class="gauge-label">Dilation level (2 mm = constricted &nbsp;→&nbsp; 8 mm = dilated)</div>
+    <div class="gauge-track"><div class="gauge-fill" id="gauge-fill"></div></div>
+    <div class="gauge-range"><span>2 mm</span><span>5 mm</span><span>8 mm</span></div>
+    <div class="pupil-note">
+      Uses MediaPipe iris landmarks 468–477 (refined model).<br>
+      Diameter normalized by interpupillary distance (assumed avg 63 mm).
+      Estimates reflect <em>iris</em> aperture; true pupil dilation is proportional.
+    </div>
+  </div>
+
+  <!-- Eye Aspect Ratio / Openness -->
+  <div class="ear-section">
+    <h2>Eye Openness — Eye Aspect Ratio (EAR)</h2>
+    <div class="ear-row-group">
+      <div>
+        <div class="ear-row">
+          <span class="eye-label">Left</span>
+          <span class="ear-value" id="ear-left">—</span>
+        </div>
+        <div class="ear-row" style="margin-top:8px">
+          <span class="eye-label">Right</span>
+          <span class="ear-value" id="ear-right">—</span>
+        </div>
+        <div class="ear-row" style="margin-top:8px">
+          <span class="eye-label">Avg</span>
+          <span class="ear-value" id="ear-avg">—</span>
+          <span class="eye-status" id="eye-status">—</span>
+        </div>
+      </div>
+      <div>
+        <div class="blink-counter">
+          <span class="blink-count-val" id="blink-count">0</span>
+          <span class="blink-count-label">blinks detected</span>
+        </div>
+      </div>
+    </div>
+    <div class="gauge-label">Eye openness (0 = closed → 0.35 = wide open)</div>
+    <div class="gauge-track"><div class="gauge-fill" id="ear-gauge-fill"></div></div>
+    <div class="gauge-range"><span>Closed (0)</span><span>Normal (0.25)</span><span>Wide (0.35+)</span></div>
+    <div class="pupil-note" style="margin-top:10px">
+      EAR uses eyelid landmarks 33, 133, 158, 160, 144, 153 (left) and 263, 362, 385, 387, 373, 380 (right).<br>
+      Blink threshold: EAR &lt; 0.15 for ≥ 2 consecutive frames.
+    </div>
+  </div>
+
+  <!-- Log -->
+  <div class="log-section">
+    <h2>Event Log</h2>
+    <ul id="event-log"></ul>
+  </div>
+
+</div>
+
+<script>
+  // ── DOM refs ──────────────────────────────────────────────────
+  const gazeDot    = document.getElementById('gaze-dot');
+  const indicator  = document.getElementById('status-indicator');
+  const statusText = document.getElementById('status-text');
+  const coordX     = document.getElementById('coord-x');
+  const coordY     = document.getElementById('coord-y');
+  const stateEl    = document.getElementById('tracking-state');
+  const btnStart   = document.getElementById('btn-start');
+  const btnPause   = document.getElementById('btn-pause');
+  const btnRecal   = document.getElementById('btn-recal');
+  const btnClear   = document.getElementById('btn-clear');
+  const btnStop    = document.getElementById('btn-stop');
+  const targets    = Array.from(document.querySelectorAll('.target'));
+  const canvas     = document.getElementById('heatmap-canvas');
+  const ctx        = canvas.getContext('2d');
+  const log        = document.getElementById('event-log');
+  const calOverlay = document.getElementById('cal-overlay');
+  const calCurrent = document.getElementById('cal-current');
+
+  let isPaused = false;
+  let isTracking = false;
+
+  // ── Calibration setup ─────────────────────────────────────────
+  const CLICKS_NEEDED = 5;
+  const CAL_POSITIONS = [
+    [10, 10],[50, 10],[90, 10],
+    [10, 50],[50, 50],[90, 50],
+    [10, 90],[50, 90],[90, 90],
+  ];
+
+  let calDots = [];
+  let currentCalIdx = 0;
+  let calClickCounts = new Array(9).fill(0);
+
+  function buildCalDots() {
+    // Remove old dots
+    calDots.forEach(d => d.remove());
+    calDots = [];
+    calClickCounts = new Array(9).fill(0);
+    currentCalIdx = 0;
+
+    CAL_POSITIONS.forEach(([lp, tp], i) => {
+      const dot = document.createElement('div');
+      dot.className = 'cal-dot';
+      dot.style.left = lp + '%';
+      dot.style.top  = tp + '%';
+
+      // SVG arc progress ring
+      dot.innerHTML = `
+        <svg viewBox="0 0 36 36">
+          <circle cx="18" cy="18" r="18"/>
+        </svg>
+        <span class="dot-label">0</span>`;
+
+      dot.addEventListener('click', () => onCalDotClick(i));
+      calOverlay.appendChild(dot);
+      calDots.push(dot);
+    });
+
+    activateCalDot(0);
+  }
+
+  function activateCalDot(idx) {
+    calDots.forEach((d, i) => {
+      d.classList.toggle('active-dot', i === idx);
+    });
+    calCurrent.textContent = idx + 1;
+  }
+
+  function onCalDotClick(idx) {
+    if (idx !== currentCalIdx) return; // only active dot is clickable
+
+    calClickCounts[idx]++;
+    const count = calClickCounts[idx];
+    const dot   = calDots[idx];
+
+    // Update label
+    dot.querySelector('.dot-label').textContent = count;
+
+    // Update progress ring (circumference = 2π*18 ≈ 113)
+    const offset = 113 - (113 * count / CLICKS_NEEDED);
+    dot.querySelector('circle').style.strokeDashoffset = offset;
+
+    if (count >= CLICKS_NEEDED) {
+      dot.classList.remove('active-dot');
+      dot.classList.add('done');
+      dot.querySelector('.dot-label').textContent = '✓';
+
+      const next = currentCalIdx + 1;
+      if (next < CAL_POSITIONS.length) {
+        currentCalIdx = next;
+        activateCalDot(next);
+      } else {
+        // All done
+        finishCalibration();
+      }
+    }
+  }
+
+  function showCalibration() {
+    buildCalDots();
+    calOverlay.classList.add('show');
+    addLog('Calibration started — click each dot while looking at it');
+  }
+
+  function finishCalibration() {
+    calOverlay.classList.remove('show');
+    gazeDot.classList.add('active');
+    setStatus('active', 'Tracking active — look around!');
+    stateEl.textContent = 'Calibrated';
+    stateEl.className = 'valid';
+    addLog('Calibration complete — live tracking started');
+  }
+
+  // ── Heatmap ───────────────────────────────────────────────────
+  function resizeCanvas() {
+    canvas.width  = canvas.offsetWidth;
+    canvas.height = canvas.offsetHeight;
+  }
+  resizeCanvas();
+  window.addEventListener('resize', resizeCanvas);
+
+  function paintHeatmap(vx, vy) {
+    const rect = canvas.getBoundingClientRect();
+    const cx = vx - rect.left;
+    const cy = vy - rect.top;
+    if (cx < 0 || cy < 0 || cx > rect.width || cy > rect.height) return;
+    const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, 40);
+    g.addColorStop(0,   'rgba(255, 80,  80,  0.18)');
+    g.addColorStop(0.5, 'rgba(255, 160, 80,  0.07)');
+    g.addColorStop(1,   'rgba(255, 220, 80,  0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(cx - 40, cy - 40, 80, 80);
+  }
+
+  function clearHeatmap() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    addLog('Heatmap cleared');
+  }
+
+  // ── Event log ─────────────────────────────────────────────────
+  function addLog(msg, isError = false) {
+    const now = new Date();
+    const ts  = [now.getHours(), now.getMinutes(), now.getSeconds()]
+                  .map(n => String(n).padStart(2, '0')).join(':');
+    const li  = document.createElement('li');
+    li.innerHTML = `<span class="ts">${ts}</span><span class="${isError ? 'err' : 'msg'}">${msg}</span>`;
+    log.prepend(li);
+    while (log.children.length > 60) log.lastChild.remove();
+  }
+
+  // ── Target hit detection (viewport coords) ────────────────────
+  function checkTargets(vx, vy) {
+    targets.forEach(t => {
+      const r  = t.getBoundingClientRect();
+      const cx = r.left + r.width  / 2;
+      const cy = r.top  + r.height / 2;
+      const hit = Math.hypot(vx - cx, vy - cy) < r.width * 0.65;
+      t.classList.toggle('gazed', hit);
+    });
+  }
+
+  // ── WebGazer gaze listener ────────────────────────────────────
+  function onGazeData(data) {
+    if (!data) {
+      stateEl.textContent = 'No face detected';
+      stateEl.className = 'lost';
+      targets.forEach(t => t.classList.remove('gazed'));
+      return;
+    }
+
+    const { x, y } = data; // viewport-relative px
+
+    gazeDot.style.left = x + 'px';
+    gazeDot.style.top  = y + 'px';
+    coordX.textContent = Math.round(x);
+    coordY.textContent = Math.round(y);
+    stateEl.textContent = 'Tracking';
+    stateEl.className = 'valid';
+
+    checkTargets(x, y);
+    paintHeatmap(x, y);
+  }
+
+  // ── Controls ──────────────────────────────────────────────────
+  async function startTracking() {
+    btnStart.disabled = true;
+    setStatus('active', 'Loading WebGazer… please wait.');
+    addLog('Initialising WebGazer.js');
+
+    try {
+      await webgazer
+        .setGazeListener(onGazeData)
+        .begin();
+
+      // Hide WebGazer's built-in red dot; use our own
+      webgazer.showPredictionPoints(false);
+
+      isTracking = true;
+      btnPause.disabled = false;
+      btnRecal.disabled = false;
+      btnClear.disabled = false;
+      btnStop.disabled  = false;
+
+      addLog('WebGazer started — camera active');
+      // Delay briefly so the video element is created by WebGazer
+      setTimeout(initIrisEstimation, 1500);
+      showCalibration();
+    } catch (err) {
+      addLog('Failed to start: ' + err.message, true);
+      setStatus('error', 'Error: ' + err.message);
+      btnStart.disabled = false;
+    }
+  }
+
+  function togglePause() {
+    if (!isPaused) {
+      webgazer.pause();
+      isPaused = true;
+      btnPause.textContent = 'Resume';
+      btnPause.className = 'btn btn-start';
+      gazeDot.classList.remove('active');
+      stateEl.textContent = 'Paused';
+      stateEl.className = 'paused';
+      targets.forEach(t => t.classList.remove('gazed'));
+      setStatus('paused', 'Tracking paused.');
+      addLog('Tracking paused');
+      clearTimeout(irisTimerId); // pause iris loop
+    } else {
+      webgazer.resume();
+      isPaused = false;
+      btnPause.textContent = 'Pause';
+      btnPause.className = 'btn btn-pause';
+      gazeDot.classList.add('active');
+      setStatus('active', 'Tracking resumed.');
+      addLog('Tracking resumed');
+      scheduleIrisFrame(); // resume iris loop
+    }
+  }
+
+  function clearCalData() {
+    webgazer.clearData();
+    addLog('Calibration data cleared — recalibrate for best accuracy');
+    stateEl.textContent = 'Uncalibrated';
+    stateEl.className = '';
+  }
+
+  function stopTracking() {
+    webgazer.end();
+    isTracking = false;
+    isPaused   = false;
+    gazeDot.classList.remove('active');
+    calOverlay.classList.remove('show');
+    targets.forEach(t => t.classList.remove('gazed'));
+    coordX.textContent = '—';
+    coordY.textContent = '—';
+    stateEl.textContent = 'Stopped';
+    stateEl.className = '';
+    btnStart.disabled = false;
+    btnPause.disabled = true;
+    btnPause.textContent = 'Pause';
+    btnPause.className = 'btn btn-pause';
+    btnRecal.disabled = true;
+    btnClear.disabled = true;
+    btnStop.disabled  = true;
+    setStatus('idle', 'Tracking stopped. Calibration data saved locally.');
+    addLog('WebGazer stopped');
+    stopIrisEstimation();
+  }
+
+  function setStatus(type, text) {
+    indicator.className = 'status-indicator ' + type;
+    statusText.textContent = text;
+  }
+
+  // ── Pupil / iris diameter estimation ──────────────────────────
+  let irisInstance  = null;
+  let irisTimerId   = null;
+  let irisRunning   = false;
+
+  // ── Blink detection state ──────────────────────────────────────
+  let blinkFrameCount = 0;
+  let totalBlinks     = 0;
+  let blinkConfirmed  = false;
+  const BLINK_THRESHOLD = 0.15;
+  const BLINK_MIN_FRAMES = 2;
+
+  async function initIrisEstimation() {
+    if (typeof FaceMesh === 'undefined') {
+      addLog('FaceMesh not loaded — pupil estimation unavailable', true);
+      return;
+    }
+
+    irisInstance = new FaceMesh({
+      locateFile: (file) => `/mediapipe/face_mesh/${file}`
+    });
+
+    irisInstance.setOptions({
+      maxNumFaces: 1,
+      refineLandmarks: true,       // enables iris landmarks 468–477
+      minDetectionConfidence: 0.5,
+      minTrackingConfidence: 0.5
+    });
+
+    irisInstance.onResults(onIrisResults);
+    irisRunning = true;
+    addLog('Iris diameter estimator ready');
+    scheduleIrisFrame();
+  }
+
+  function scheduleIrisFrame() {
+    if (!irisRunning || !isTracking || isPaused) return;
+    irisTimerId = setTimeout(async () => {
+      const video = document.getElementById('webgazerVideoFeed');
+      if (video && video.readyState >= 2 && !video.paused) {
+        try { await irisInstance.send({ image: video }); } catch (_) {}
+      }
+      scheduleIrisFrame();
+    }, 80); // ~12 fps — enough for smooth display
+  }
+
+  function stopIrisEstimation() {
+    irisRunning = false;
+    clearTimeout(irisTimerId);
+    document.getElementById('pupil-left').textContent  = '—';
+    document.getElementById('pupil-right').textContent = '—';
+    document.getElementById('pupil-avg').textContent   = '—';
+    document.getElementById('gauge-fill').style.width  = '0';
+    document.getElementById('ear-left').textContent    = '—';
+    document.getElementById('ear-right').textContent   = '—';
+    document.getElementById('ear-avg').textContent     = '—';
+    document.getElementById('ear-gauge-fill').style.width = '0';
+    document.getElementById('eye-status').textContent  = '—';
+    document.getElementById('eye-status').className    = 'eye-status';
+    document.getElementById('blink-count').textContent = '0';
+    blinkFrameCount = 0; totalBlinks = 0; blinkConfirmed = false;
+  }
+
+  function onIrisResults(results) {
+    if (!results.multiFaceLandmarks || !results.multiFaceLandmarks[0]) return;
+    const lm = results.multiFaceLandmarks[0];
+    if (lm.length < 478) return; // refined landmarks not present
+
+    const video = document.getElementById('webgazerVideoFeed');
+    const W = video ? video.videoWidth  : 640;
+    const H = video ? video.videoHeight : 480;
+
+    // Convert normalized → pixel coords
+    const px  = pt => ({ x: pt.x * W, y: pt.y * H });
+    const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+
+    // Iris boundary landmarks
+    // Left:  468=center, 469=right, 470=top, 471=left, 472=bottom
+    // Right: 473=center, 474=right, 475=top, 476=left, 477=bottom
+    const leftDiamPx  = (dist(px(lm[469]), px(lm[471])) + dist(px(lm[470]), px(lm[472]))) / 2;
+    const rightDiamPx = (dist(px(lm[474]), px(lm[476])) + dist(px(lm[475]), px(lm[477]))) / 2;
+
+    // Normalise using interpupillary distance (average adult IPD = 63 mm)
+    const ipdPx = dist(px(lm[468]), px(lm[473]));
+    if (ipdPx < 10) return; // face not clearly visible
+
+    const mmPerPx = 63 / ipdPx;
+    const leftMm  = +(leftDiamPx  * mmPerPx).toFixed(1);
+    const rightMm = +(rightDiamPx * mmPerPx).toFixed(1);
+    const avgMm   = +((leftMm + rightMm) / 2).toFixed(1);
+
+    document.getElementById('pupil-left').textContent  = leftMm;
+    document.getElementById('pupil-right').textContent = rightMm;
+    document.getElementById('pupil-avg').textContent   = avgMm;
+
+    // Gauge: 2 mm → 0 %, 8 mm → 100 %
+    const pct = Math.min(100, Math.max(0, (avgMm - 2) / 6 * 100));
+    const hue = Math.round(120 - pct * 1.2); // green → yellow → red
+    const fill = document.getElementById('gauge-fill');
+    fill.style.width      = pct + '%';
+    fill.style.background = `hsl(${hue}, 75%, 48%)`;
+
+    // ── EAR (Eye Aspect Ratio) ─────────────────────────────────
+    // Left eye:  outer=33, inner=133, upper=(160,158), lower=(144,153)
+    // Right eye: outer=362, inner=263, upper=(385,387), lower=(373,380)
+    const earLeft  = (dist(px(lm[160]), px(lm[144])) + dist(px(lm[158]), px(lm[153])))
+                   / (2 * dist(px(lm[33]),  px(lm[133])));
+    const earRight = (dist(px(lm[385]), px(lm[373])) + dist(px(lm[387]), px(lm[380])))
+                   / (2 * dist(px(lm[362]), px(lm[263])));
+    const earAvg   = (earLeft + earRight) / 2;
+
+    document.getElementById('ear-left').textContent  = earLeft.toFixed(2);
+    document.getElementById('ear-right').textContent = earRight.toFixed(2);
+    document.getElementById('ear-avg').textContent   = earAvg.toFixed(2);
+
+    // Openness gauge: 0 → 0%, 0.35 → 100%
+    const earPct  = Math.min(100, Math.max(0, earAvg / 0.35 * 100));
+    const earHue  = Math.round(earPct * 1.2); // red (0) → green (120)
+    const earFill = document.getElementById('ear-gauge-fill');
+    earFill.style.width      = earPct + '%';
+    earFill.style.background = `hsl(${earHue}, 75%, 48%)`;
+
+    // Status badge + blink detection
+    const statusEl = document.getElementById('eye-status');
+    if (earAvg < BLINK_THRESHOLD) {
+      blinkFrameCount++;
+      if (blinkFrameCount >= BLINK_MIN_FRAMES && !blinkConfirmed) {
+        blinkConfirmed = true;
+        totalBlinks++;
+        document.getElementById('blink-count').textContent = totalBlinks;
+        statusEl.textContent = 'BLINK!';
+        statusEl.className   = 'eye-status blink';
+        addLog(`Blink #${totalBlinks} detected (EAR ${earAvg.toFixed(2)})`);
+      } else if (!blinkConfirmed) {
+        statusEl.textContent = 'Closed';
+        statusEl.className   = 'eye-status closed';
+      }
+    } else {
+      blinkFrameCount = 0;
+      blinkConfirmed  = false;
+      if (earAvg >= 0.25) {
+        statusEl.textContent = 'Open';
+        statusEl.className   = 'eye-status open';
+      } else {
+        statusEl.textContent = 'Squinting';
+        statusEl.className   = 'eye-status squinting';
+      }
+    }
+  }
+</script>
+</body>
+</html>
