@@ -248,10 +248,32 @@
       font-size:.88rem;z-index:9999;display:none;pointer-events:none
     }
 
+    /* ── Experiment selection cards ──────────────────── */
+    .exp-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:18px;max-width:720px;width:100%;margin:0 auto 28px}
+    .ec{background:#161b22;border:2px solid #30363d;border-radius:12px;padding:24px 20px;cursor:pointer;transition:border-color .2s,transform .15s;text-align:left}
+    .ec:hover{border-color:#58a6ff;transform:translateY(-2px)}
+    .ec h3{color:#58a6ff;font-size:1rem;margin-bottom:8px}
+    .ec p{color:#8b949e;font-size:.82rem;line-height:1.5}
+    .ec .tag{display:inline-block;padding:2px 8px;border-radius:4px;font-size:.72rem;font-weight:700;margin-bottom:8px}
+
+    /* ── Experiment 2 – word-reading display ─────────── */
+    #ph-experiment2{position:relative;background:#0d1117;justify-content:center;align-items:center}
+    #exp2-para-wrap{max-width:860px;width:90%;text-align:justify;line-height:2.4;font-size:1.45rem;padding:120px 20px 60px;user-select:none}
+    .exp2-word{color:rgba(230,237,243,.25);transition:color .12s;cursor:default;display:inline}
+    .exp2-word.active{color:#f0c000;font-weight:700;text-shadow:0 0 20px rgba(240,192,0,.6)}
+    .exp2-word.done{color:rgba(63,185,80,.45)}
+    #exp2-status{position:fixed;top:6%;left:50%;transform:translateX(-50%);background:rgba(22,27,34,.92);border:1px solid #30363d;border-radius:10px;padding:12px 28px;text-align:center;z-index:820;min-width:280px}
+    #exp2-status h3{color:#58a6ff;font-size:1rem;margin-bottom:4px}
+    #exp2-timer{font-size:2rem;font-weight:700;color:#e6edf3;margin:4px 0}
+    #exp2-progress{font-size:.82rem;color:#8b949e}
+    #exp2-collect-badge{display:inline-block;padding:2px 10px;border-radius:12px;font-size:.75rem;font-weight:700;margin-top:6px;background:rgba(248,81,73,.2);color:#f85149}
+    #exp2-collect-badge.collecting{background:rgba(63,185,80,.2);color:#3fb950}
+
     @media(max-width:700px){
       .method-grid{grid-template-columns:1fr}
       .dot-grid{grid-template-columns:1fr}
       .cmp-grid{grid-template-columns:1fr}
+      .exp-grid{grid-template-columns:1fr}
     }
   </style>
 </head>
@@ -371,30 +393,43 @@
     <h2 id="ready-title" style="color:#58a6ff;margin-bottom:6px">Calibration Complete</h2>
     <p id="ready-method" style="color:#8b949e;font-size:.85rem;margin-bottom:24px"></p>
 
-    <div style="text-align:left;background:#0d1117;border-radius:10px;padding:20px 24px;margin-bottom:28px;font-size:.88rem;line-height:1.8">
-      <div style="color:#e6edf3;font-weight:600;margin-bottom:10px">How the experiment works</div>
-      <ul style="color:#8b949e;padding-left:18px;margin:0">
-        <li><span style="color:#e6edf3">9 dots</span> will appear one by one on screen</li>
-        <li>Each dot is shown for <span style="color:#e6edf3">10 seconds</span></li>
-        <li>The first <span style="color:#e6edf3">1 second</span> is a settling pause — just move your gaze to the dot</li>
-        <li>The remaining <span style="color:#e6edf3">9 seconds</span> collect gaze data (~15 samples/s)</li>
-        <li><span style="color:#e6edf3">Look directly at each dot</span> and keep your head still</li>
-        <li>The mouse cursor will be <span style="color:#e6edf3">hidden</span> during the experiment</li>
-        <li>Press <kbd style="background:#21262d;border:1px solid #30363d;border-radius:4px;padding:1px 5px;font-size:.8rem;color:#e6edf3">H</kbd> to show/hide the gaze estimation dot</li>
-      </ul>
-    </div>
+    <div id="ready-instructions" style="text-align:left;background:#0d1117;border-radius:10px;padding:20px 24px;margin-bottom:28px;font-size:.88rem;line-height:1.8"></div>
 
-    <button class="btn btn-green" onclick="startExperiment()" style="font-size:1rem;padding:12px 40px">
+    <button class="btn btn-green" onclick="startCurrentExperiment()" style="font-size:1rem;padding:12px 40px">
       Start Experiment →
     </button>
     <div style="margin-top:12px">
-      <button class="btn btn-grey" onclick="showPhase('ph-select')" style="font-size:.8rem">← Back to Menu</button>
+      <button class="btn btn-grey" onclick="showPhase('ph-exp-select')" style="font-size:.8rem">← Back</button>
     </div>
   </div>
 </div>
 
 <!-- ══════════════════════════════════════════════════════
-     PHASE 3 – Experiment
+     PHASE 2b – Experiment selection (after calibration)
+══════════════════════════════════════════════════════════ -->
+<div id="ph-exp-select" class="phase" style="align-items:center;justify-content:center;padding:40px 20px;text-align:center">
+  <h1 style="color:#58a6ff;font-size:1.6rem;margin-bottom:6px">Choose Experiment</h1>
+  <p id="exp-sel-method" style="color:#8b949e;font-size:.88rem;margin-bottom:28px"></p>
+  <div class="exp-grid">
+    <div class="ec" onclick="selectExperiment(1)">
+      <span class="tag tag-wg">Experiment 1</span>
+      <h3>Fixation Accuracy</h3>
+      <p>9 static target dots appear one by one for 10 s each. Look at each dot steadily. Measures how accurately your gaze lands on fixed screen points.</p>
+    </div>
+    <div class="ec" onclick="selectExperiment(2)">
+      <span class="tag tag-ml">Experiment 2</span>
+      <h3>Reading Task</h3>
+      <p>A paragraph about Transformers &amp; VAEs is shown word by word. Look at and read each highlighted word aloud. Measures gaze accuracy during natural reading.</p>
+    </div>
+  </div>
+  <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap">
+    <button class="btn btn-grey" onclick="doRecalibrate()">↺ Recalibrate</button>
+    <button class="btn btn-grey" onclick="goSelectMethod()">← Change Method</button>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════
+     PHASE 3 – Experiment 1
 ══════════════════════════════════════════════════════════ -->
 <div id="ph-experiment" class="phase">
   <div id="exp-dot"></div>
@@ -414,7 +449,27 @@
 </div>
 
 <!-- ══════════════════════════════════════════════════════
-     PHASE 3 – Results
+     PHASE 4 – Experiment 2 (word reading)
+══════════════════════════════════════════════════════════ -->
+<div id="ph-experiment2" class="phase">
+  <div id="exp2-status">
+    <h3 id="exp2-method-name">–</h3>
+    <div id="exp2-timer">–</div>
+    <div id="exp2-progress">Word 1 / –</div>
+    <div id="exp2-collect-badge">Waiting…</div>
+    <div style="margin-top:10px;display:flex;gap:8px;justify-content:center">
+      <button onclick="toggleGazeDot()"
+        style="padding:4px 12px;border-radius:6px;border:1px solid #58a6ff;
+               background:#21262d;color:#58a6ff;font-size:.72rem;cursor:pointer"
+        id="btn-toggle-gaze2">Show Gaze Dot [H]</button>
+    </div>
+  </div>
+  <!-- Paragraph rendered by JS as spans -->
+  <div id="exp2-para-wrap"></div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════
+     PHASE 5 – Results
 ══════════════════════════════════════════════════════════ -->
 <div id="ph-results" class="phase">
   <div class="results-hdr">
@@ -423,7 +478,8 @@
       <div class="sub" id="res-subtitle"></div>
     </div>
     <div class="btn-row">
-      <button class="btn btn-blue" onclick="goSelectAnother()">Try Another Method</button>
+      <button class="btn btn-green" onclick="runAnotherExperiment()">Run Another Experiment</button>
+      <button class="btn btn-blue" onclick="goSelectAnother()">Change Method</button>
       <button class="btn btn-save" onclick="saveResults()">⬇ Save Results</button>
       <button class="btn btn-grey" onclick="showPhase('ph-select')">← Menu</button>
     </div>
@@ -481,12 +537,25 @@ const METHOD_LABELS = {
   'iris-poly':   'Iris Polynomial Regression'
 };
 
+// ── Experiment 2 constants ────────────────────────────────
+const EXP2_PARAGRAPH =
+  'The Transformer architecture uses self-attention to capture relationships ' +
+  'between all tokens in parallel making training highly scalable. ' +
+  'Variational Autoencoders learn a structured latent space by encoding data ' +
+  'as probability distributions enabling controlled sampling and generation ' +
+  'of novel coherent outputs.';
+const EXP2_WORDS = EXP2_PARAGRAPH.replace(/\./g,'').split(/\s+/).filter(w => w.length > 0);
+const EXP2_WORD_DURATION_MS = 2500; // time each word is highlighted
+const EXP2_WORD_SKIP_MS     = 400;  // settling pause before data collection
+
 /* ═══════════════════════════════════════════════════════════
    STATE
 ═══════════════════════════════════════════════════════════ */
-let selectedMethod = null;
-let allRuns        = [];       // all completed run result objects
-let latestRunIdx   = -1;
+let selectedMethod     = null;
+let selectedExperiment = null;  // 1 or 2
+let isCalibrated       = false; // true after first calibration; skip re-cal between experiments
+let allRuns            = [];    // all completed run result objects
+let latestRunIdx       = -1;
 
 // Iris method state
 let videoEl    = null;
@@ -527,8 +596,18 @@ let expDotTimer   = null;  // setTimeout: advance to next dot
 let expCountdownId = null; // setInterval: countdown display only
 let expDotStart  = null;
 
+// Experiment 2 state
+let exp2WordIndex   = 0;
+let exp2Samples     = [];
+let exp2Results     = [];
+let exp2SampleId    = null;
+let exp2WordTimer   = null;
+let exp2CountdownId = null;
+let exp2WordStart   = null;
+
 // Chart instances (to destroy before re-creating)
 let dotChartInstances  = [];
+let exp2ChartInstances = [];
 let compareChartInst   = null;
 let methodBarCharts    = [];
 
@@ -891,7 +970,7 @@ function onWgDotClick(idx) {
 function finishWebGazerCalibration() {
   document.getElementById('cal-prog').textContent = '✓ Calibration complete!';
   document.getElementById('cal-overlay').classList.remove('show');
-  setTimeout(showReadyPhase, 600);
+  setTimeout(showExpSelectPhase, 600);
 }
 
 /* ── Iris calibration ─────────────────────────────────── */
@@ -994,7 +1073,7 @@ function finishIrisCalibration() {
 
   document.getElementById('cal-prog').textContent = '✓ Calibration complete!';
   document.getElementById('cal-overlay').classList.remove('show');
-  setTimeout(showReadyPhase, 600);
+  setTimeout(showExpSelectPhase, 600);
 }
 
 /* ── Cal dot helpers ──────────────────────────────────── */
@@ -1029,9 +1108,75 @@ function toggleGazeDot() {
 }
 
 
+/* ── Experiment-selection navigation ──────────────────── */
+function showExpSelectPhase() {
+  isCalibrated = true;
+  document.getElementById('exp-sel-method').textContent =
+    'Method: ' + METHOD_LABELS[selectedMethod] + '   ✓ Calibrated';
+  showPhase('ph-exp-select');
+}
+
+function selectExperiment(n) {
+  selectedExperiment = n;
+  showReadyPhase();
+}
+
+function doRecalibrate() {
+  isCalibrated = false;
+  calModel = null; wgGaze = null;
+  beginCalibration();
+}
+
+function goSelectMethod() {
+  isCalibrated = false;
+  selectedMethod = null;
+  ['webgazer','iris-linear','iris-poly'].forEach(id =>
+    document.getElementById('mc-'+id).classList.remove('sel'));
+  document.getElementById('btn-start-exp').disabled = true;
+  showPhase('ph-select');
+}
+
+function runAnotherExperiment() {
+  showExpSelectPhase();
+}
+
+function startCurrentExperiment() {
+  if (selectedExperiment === 1) startExperiment();
+  else if (selectedExperiment === 2) startExperiment2();
+}
+
 function showReadyPhase() {
-  document.getElementById('ready-title').textContent = 'Calibration Complete ✓';
-  document.getElementById('ready-method').textContent = 'Method: ' + METHOD_LABELS[selectedMethod];
+  document.getElementById('ready-title').textContent =
+    'Ready — Experiment ' + selectedExperiment;
+  document.getElementById('ready-method').textContent =
+    'Method: ' + METHOD_LABELS[selectedMethod];
+
+  const kbdStyle = 'background:#21262d;border:1px solid #30363d;border-radius:4px;padding:1px 5px;font-size:.8rem;color:#e6edf3';
+  const hKey = `<kbd style="${kbdStyle}">H</kbd>`;
+
+  let html = '<div style="color:#e6edf3;font-weight:600;margin-bottom:10px">How this experiment works</div>';
+  if (selectedExperiment === 1) {
+    html += `<ul style="color:#8b949e;padding-left:18px;margin:0">
+      <li><span style="color:#e6edf3">9 dots</span> appear one by one on screen</li>
+      <li>Each dot is shown for <span style="color:#e6edf3">10 seconds</span></li>
+      <li>First <span style="color:#e6edf3">1 s</span> is a settling pause — move your gaze to the dot</li>
+      <li>Remaining <span style="color:#e6edf3">9 s</span> collect gaze data (~15 samples/s)</li>
+      <li><span style="color:#e6edf3">Look directly at each dot</span> and keep your head still</li>
+      <li>Mouse cursor is <span style="color:#e6edf3">hidden</span> during the experiment</li>
+      <li>Press ${hKey} to show/hide the gaze estimation dot</li>
+    </ul>`;
+  } else {
+    html += `<ul style="color:#8b949e;padding-left:18px;margin:0">
+      <li>A paragraph about <span style="color:#e6edf3">Transformers &amp; VAEs</span> is displayed</li>
+      <li>Each word is highlighted one by one for <span style="color:#e6edf3">2.5 seconds</span></li>
+      <li><span style="color:#e6edf3">Look at and read aloud</span> each highlighted word</li>
+      <li>First <span style="color:#e6edf3">0.4 s</span> is a settling pause; remaining 2.1 s collect gaze data</li>
+      <li>Total: <span style="color:#e6edf3">${EXP2_WORDS.length} words</span></li>
+      <li>Mouse cursor is <span style="color:#e6edf3">hidden</span> during the experiment</li>
+      <li>Press ${hKey} to show/hide the gaze estimation dot</li>
+    </ul>`;
+  }
+  document.getElementById('ready-instructions').innerHTML = html;
   showPhase('ph-ready');
 }
 
@@ -1060,6 +1205,150 @@ function renderHeatmap(samples, gtX, gtY) {
   ctx.beginPath(); ctx.moveTo(gtX-8, gtY); ctx.lineTo(gtX+8, gtY); ctx.stroke();
   ctx.beginPath(); ctx.moveTo(gtX, gtY-8); ctx.lineTo(gtX, gtY+8); ctx.stroke();
   return canvas.toDataURL('image/png');
+}
+
+/* ═══════════════════════════════════════════════════════════
+   EXPERIMENT 2 – WORD READING TASK
+═══════════════════════════════════════════════════════════ */
+function startExperiment2() {
+  exp2WordIndex = 0; exp2Results = []; exp2Samples = [];
+  // Reset gaze dot button
+  gazeVisible = false;
+  document.getElementById('gaze-dot-exp').style.display = 'none';
+  const btn2 = document.getElementById('btn-toggle-gaze2');
+  btn2.textContent = 'Show Gaze Dot [H]';
+  btn2.style.color = '#58a6ff'; btn2.style.borderColor = '#58a6ff';
+  document.getElementById('exp2-method-name').textContent = METHOD_LABELS[selectedMethod];
+  document.getElementById('exp2-progress').textContent = 'Word 1 / ' + EXP2_WORDS.length;
+  document.body.classList.add('cursor-hidden');
+  if (selectedMethod === 'webgazer' && wgRunning)
+    try { webgazer.removeMouseEventListeners(); } catch(_) {}
+
+  // Build paragraph spans
+  const wrap = document.getElementById('exp2-para-wrap');
+  wrap.innerHTML = '';
+  EXP2_WORDS.forEach((word, i) => {
+    const span = document.createElement('span');
+    span.id = 'exp2w-' + i;
+    span.className = 'exp2-word';
+    span.textContent = word + ' ';
+    wrap.appendChild(span);
+  });
+
+  showPhase('ph-experiment2');
+  setTimeout(showNextWord2, 600);
+}
+
+function showNextWord2() {
+  if (exp2WordIndex >= EXP2_WORDS.length) { finishExperiment2(); return; }
+
+  // Mark previous word done
+  if (exp2WordIndex > 0)
+    document.getElementById('exp2w-' + (exp2WordIndex-1)).className = 'exp2-word done';
+
+  const span = document.getElementById('exp2w-' + exp2WordIndex);
+  span.className = 'exp2-word active';
+  span.scrollIntoView({behavior:'smooth', block:'center'});
+
+  // Ground truth = center of the word span on screen
+  const rect = span.getBoundingClientRect();
+  const gtX  = rect.left + rect.width  / 2;
+  const gtY  = rect.top  + rect.height / 2;
+
+  document.getElementById('exp2-progress').textContent =
+    'Word ' + (exp2WordIndex + 1) + ' / ' + EXP2_WORDS.length;
+
+  const badge = document.getElementById('exp2-collect-badge');
+  badge.textContent = 'Waiting…';
+  badge.className = 'exp2-collect-badge';
+
+  exp2Samples  = [];
+  exp2WordStart = performance.now();
+
+  // Countdown display
+  let elapsed = 0;
+  const timerEl = document.getElementById('exp2-timer');
+  timerEl.textContent = (EXP2_WORD_DURATION_MS / 1000).toFixed(1);
+  if (exp2CountdownId) clearInterval(exp2CountdownId);
+  exp2CountdownId = setInterval(() => {
+    elapsed += 100;
+    timerEl.textContent = Math.max(0, (EXP2_WORD_DURATION_MS - elapsed) / 1000).toFixed(1);
+    if (elapsed >= EXP2_WORD_DURATION_MS) { clearInterval(exp2CountdownId); exp2CountdownId = null; }
+  }, 100);
+
+  // Start collecting after skip
+  setTimeout(() => {
+    badge.textContent = '● Collecting…';
+    badge.className = 'exp2-collect-badge collecting';
+    exp2SampleId = setInterval(() => collectGazeSampleExp2(gtX, gtY), SAMPLE_INTERVAL);
+  }, EXP2_WORD_SKIP_MS);
+
+  // Advance to next word
+  exp2WordTimer = setTimeout(() => {
+    clearInterval(exp2SampleId);
+    clearInterval(exp2CountdownId); exp2CountdownId = null;
+    updateGazeDot(null, null);
+    exp2Results.push({
+      wordIdx: exp2WordIndex,
+      word:    EXP2_WORDS[exp2WordIndex],
+      gtX: Math.round(gtX), gtY: Math.round(gtY),
+      samples: [...exp2Samples],
+      heatmapUrl: renderHeatmap([...exp2Samples], gtX, gtY)
+    });
+    exp2WordIndex++;
+    setTimeout(showNextWord2, 200);
+  }, EXP2_WORD_DURATION_MS);
+}
+
+function collectGazeSampleExp2(gtX, gtY) {
+  const g = getCurrentGaze();
+  if (!g) return;
+  const t = (performance.now() - exp2WordStart - EXP2_WORD_SKIP_MS) / 1000;
+  const dist = Math.hypot(g.x - gtX, g.y - gtY);
+  exp2Samples.push({t, x: g.x, y: g.y, dist});
+  updateGazeDot(g.x, g.y);
+}
+
+function finishExperiment2() {
+  updateGazeDot(null, null);
+  // Mark last word done
+  const lastSpan = document.getElementById('exp2w-' + (EXP2_WORDS.length - 1));
+  if (lastSpan) lastSpan.className = 'exp2-word done';
+  document.body.classList.remove('cursor-hidden');
+  if (selectedMethod === 'webgazer' && wgRunning)
+    try { webgazer.addMouseEventListeners(); } catch(_) {}
+
+  const wordResults = exp2Results.map(r => {
+    const dists = r.samples.map(s => s.dist);
+    const mean  = dists.length ? dists.reduce((a,b)=>a+b,0)/dists.length : 0;
+    const min   = dists.length ? Math.min(...dists) : 0;
+    const max   = dists.length ? Math.max(...dists) : 0;
+    return {
+      wordIdx: r.wordIdx,
+      word:    r.word,
+      gtX: r.gtX, gtY: r.gtY,
+      samples: r.samples,
+      heatmapUrl: r.heatmapUrl || null,
+      mean: +mean.toFixed(1), min: +min.toFixed(1), max: +max.toFixed(1)
+    };
+  });
+
+  const overallMean = +(wordResults.reduce((s,d)=>s+d.mean,0) / wordResults.length).toFixed(1);
+  const run = {
+    experimentType: 2,
+    method:    selectedMethod,
+    label:     METHOD_LABELS[selectedMethod],
+    timestamp: new Date().toISOString(),
+    wordResults,
+    overallMean
+  };
+
+  allRuns.push(run);
+  latestRunIdx = allRuns.length - 1;
+  stopFaceLoop();
+  renderResults(latestRunIdx);
+  showPhase('ph-results');
+  updateRunsList();
 }
 
 function startExperiment() {
@@ -1177,6 +1466,7 @@ function finishExperiment() {
   const overallMean = +(dotResults.reduce((s,d)=>s+d.mean,0)/dotResults.length).toFixed(1);
 
   const run = {
+    experimentType: 1,
     method:         selectedMethod,
     label:          METHOD_LABELS[selectedMethod],
     timestamp:      new Date().toISOString(),
@@ -1200,13 +1490,21 @@ function finishExperiment() {
 ═══════════════════════════════════════════════════════════ */
 function renderResults(runIdx) {
   const run = allRuns[runIdx];
+  if (run.experimentType === 2) { renderResultsExp2(runIdx); return; }
 
   // Header
-  document.getElementById('res-title').textContent = run.label + ' — Results';
+  document.getElementById('res-title').textContent =
+    'Exp 1 — Fixation Accuracy — ' + run.label;
   const d = new Date(run.timestamp);
   document.getElementById('res-subtitle').textContent =
     d.toLocaleDateString() + ' ' + d.toLocaleTimeString() +
     '   |   Overall Mean Error: ' + run.overallMean + ' px';
+  document.getElementById('sec-wave').querySelector('h2').textContent =
+    'Per-Dot Gaze Consistency (Euclidean Distance over Time)';
+  document.getElementById('sec-table').querySelector('h2').textContent =
+    'Summary — Mean Euclidean Distance per Dot';
+  document.querySelector('#summary-table thead tr').innerHTML =
+    '<th>Dot</th><th>Position (px)</th><th>Mean Error (px)</th><th>Min (px)</th><th>Max (px)</th><th>Samples</th>';
 
   // Destroy old dot charts
   dotChartInstances.forEach(c => c.destroy());
@@ -1304,6 +1602,94 @@ function renderResults(runIdx) {
   renderComparison();
 }
 
+/* ── Results for Experiment 2 ───────────────────────────── */
+function renderResultsExp2(runIdx) {
+  const run = allRuns[runIdx];
+  document.getElementById('res-title').textContent =
+    'Exp 2 — Reading Task — ' + run.label;
+  const d = new Date(run.timestamp);
+  document.getElementById('res-subtitle').textContent =
+    d.toLocaleDateString() + ' ' + d.toLocaleTimeString() +
+    '   |   Overall Mean Error: ' + run.overallMean + ' px' +
+    '   |   Words: ' + run.wordResults.length;
+  document.getElementById('sec-wave').querySelector('h2').textContent =
+    'Per-Word Gaze Consistency (Euclidean Distance over Time)';
+  document.getElementById('sec-table').querySelector('h2').textContent =
+    'Summary — Mean Euclidean Distance per Word';
+  document.querySelector('#summary-table thead tr').innerHTML =
+    '<th>#</th><th>Word</th><th>Position (px)</th><th>Mean Error (px)</th><th>Min</th><th>Max</th><th>Samples</th>';
+
+  // Destroy old charts
+  exp2ChartInstances.forEach(c => c.destroy()); exp2ChartInstances = [];
+  dotChartInstances.forEach(c => c.destroy());  dotChartInstances = [];
+
+  const grid = document.getElementById('dot-grid-latest');
+  grid.innerHTML = '';
+
+  run.wordResults.forEach((wr, i) => {
+    const distClass = wr.mean < 80 ? 'good' : wr.mean < 160 ? 'ok' : 'bad';
+    const card = document.createElement('div');
+    card.className = 'dot-card';
+    const cid = 'exp2-chart-' + i;
+    card.innerHTML = `
+      <div class="dc-hdr">
+        <h4>#${i+1} &ldquo;${wr.word}&rdquo;</h4>
+        <span class="dc-dist ${distClass}">${wr.mean} px</span>
+      </div>
+      <div class="dc-pos">Position: (${wr.gtX}, ${wr.gtY}) px</div>
+      <canvas id="${cid}" class="dc-chart"></canvas>
+      ${wr.heatmapUrl ? `<img class="dc-heatmap" src="${wr.heatmapUrl}" alt="heatmap ${wr.word}"/>` : ''}`;
+    grid.appendChild(card);
+
+    const ctx = document.getElementById(cid).getContext('2d');
+    const inst = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: wr.samples.map(s => s.t.toFixed(2)),
+        datasets: [{
+          label: 'Dist (px)', data: wr.samples.map(s => s.dist),
+          borderColor: '#3fb950', backgroundColor: 'rgba(63,185,80,.08)',
+          borderWidth: 1.5, pointRadius: 0, tension: 0.3, fill: true
+        },{
+          label: 'Mean', data: Array(wr.samples.length).fill(wr.mean),
+          borderColor: '#f85149', borderWidth: 1, borderDash: [4,3], pointRadius: 0
+        }]
+      },
+      options: {
+        animation: false, plugins: {legend:{display:false}},
+        scales: {
+          x: {ticks:{color:'#8b949e',maxTicksLimit:5,font:{size:9}},grid:{color:'#21262d'},
+              title:{display:true,text:'Time (s)',color:'#8b949e',font:{size:9}}},
+          y: {ticks:{color:'#8b949e',font:{size:9}},grid:{color:'#21262d'},
+              title:{display:true,text:'px',color:'#8b949e',font:{size:9}}}
+        }
+      }
+    });
+    exp2ChartInstances.push(inst);
+  });
+
+  // Summary table
+  const tbody = document.getElementById('summary-tbody');
+  tbody.innerHTML = '';
+  run.wordResults.forEach((wr, i) => {
+    const c = wr.mean < 80 ? '#3fb950' : wr.mean < 160 ? '#f0c000' : '#f85149';
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${i+1}</td><td>&ldquo;${wr.word}&rdquo;</td>
+      <td>(${wr.gtX},${wr.gtY})</td>
+      <td style="color:${c};font-weight:600">${wr.mean}</td>
+      <td>${wr.min}</td><td>${wr.max}</td><td>${wr.samples.length}</td>`;
+    tbody.appendChild(tr);
+  });
+  const tr = document.createElement('tr');
+  tr.className = 'total';
+  tr.innerHTML = `<td colspan="3">Overall Average</td>
+    <td>${run.overallMean}</td><td>–</td><td>–</td>
+    <td>${run.wordResults.reduce((s,w)=>s+w.samples.length,0)}</td>`;
+  tbody.appendChild(tr);
+
+  renderComparison();
+}
+
 function renderComparison() {
   const sec = document.getElementById('sec-compare');
   if (allRuns.length < 2) { sec.style.display='none'; return; }
@@ -1332,10 +1718,14 @@ function renderComparison() {
     const inst = new Chart(ctx, {
       type: 'bar',
       data: {
-        labels: run.dotResults.map((_,i)=>'Dot '+(i+1)),
+        labels: run.experimentType === 2
+          ? run.wordResults.map(w=>'"'+w.word+'"')
+          : run.dotResults.map((_,i)=>'Dot '+(i+1)),
         datasets: [{
           label: 'Mean error (px)',
-          data: run.dotResults.map(d=>d.mean),
+          data: run.experimentType === 2
+            ? run.wordResults.map(w=>w.mean)
+            : run.dotResults.map(d=>d.mean),
           backgroundColor: 'rgba(88,166,255,0.7)',
           borderColor: '#58a6ff', borderWidth: 1
         }]
@@ -1356,12 +1746,21 @@ function renderComparison() {
   // Big comparison chart: grouped bars
   if (compareChartInst) { compareChartInst.destroy(); compareChartInst = null; }
   const ctx = document.getElementById('compare-chart').getContext('2d');
-  const dotLabels = allRuns[0].dotResults.map((_,i) => 'Dot '+(i+1)).concat(['Overall']);
+  // Only compare runs of the same experiment type
+  const expType = allRuns[latestRunIdx].experimentType;
+  const sameTypeRuns = allRuns.filter(r => r.experimentType === expType);
+  if (sameTypeRuns.length < 2) { document.getElementById('sec-compare').style.display='none'; return; }
+
+  const refRun = sameTypeRuns[0];
+  const itemLabels = expType === 2
+    ? refRun.wordResults.map(w => '"'+w.word+'"').concat(['Overall'])
+    : refRun.dotResults.map((_,i) => 'Dot '+(i+1)).concat(['Overall']);
+  const dotLabels = itemLabels;
   const colors = ['#58a6ff','#3fb950','#f0c000','#f85149','#d2a8ff'];
 
-  const datasets = allRuns.map((run, ri) => ({
-    label: run.label,
-    data: run.dotResults.map(d=>d.mean).concat([run.overallMean]),
+  const datasets = sameTypeRuns.map((run, ri) => ({
+    label: run.label + (run.experimentType===2?' (Exp2)':' (Exp1)'),
+    data: (expType === 2 ? run.wordResults.map(w=>w.mean) : run.dotResults.map(d=>d.mean)).concat([run.overallMean]),
     backgroundColor: colors[ri % colors.length] + 'b3',
     borderColor:     colors[ri % colors.length],
     borderWidth: 1
@@ -1395,23 +1794,30 @@ function saveResults() {
     exportedAt:     new Date().toISOString(),
     screenWidth:    window.innerWidth,
     screenHeight:   window.innerHeight,
-    runs: allRuns.map(run => ({
-      method:       run.method,
-      label:        run.label,
-      timestamp:    run.timestamp,
-      overallMean:  run.overallMean,
-      wgClicksPerDot: run.method === 'webgazer' ? run.wgClicksPerDot : undefined,
-      dots: run.dotResults.map(dr => ({
-        dotIdx:    dr.dotIdx + 1,
-        pct:       dr.pct,
-        gtX:       dr.gtX, gtY: dr.gtY,
-        meanError: dr.mean,
-        minError:  dr.min,
-        maxError:  dr.max,
-        sampleCount: dr.samples.length,
-        timeSeries: dr.samples
-      }))
-    }))
+    runs: allRuns.map(run => {
+      const base = {
+        experimentType: run.experimentType,
+        method: run.method, label: run.label,
+        timestamp: run.timestamp, overallMean: run.overallMean,
+        wgClicksPerDot: run.method === 'webgazer' ? run.wgClicksPerDot : undefined
+      };
+      if (run.experimentType === 2) {
+        base.words = run.wordResults.map(wr => ({
+          idx: wr.wordIdx + 1, word: wr.word,
+          gtX: wr.gtX, gtY: wr.gtY,
+          meanError: wr.mean, minError: wr.min, maxError: wr.max,
+          sampleCount: wr.samples.length, timeSeries: wr.samples
+        }));
+      } else {
+        base.dots = run.dotResults.map(dr => ({
+          dotIdx: dr.dotIdx + 1, pct: dr.pct,
+          gtX: dr.gtX, gtY: dr.gtY,
+          meanError: dr.mean, minError: dr.min, maxError: dr.max,
+          sampleCount: dr.samples.length, timeSeries: dr.samples
+        }));
+      }
+      return base;
+    })
   };
 
   const blob = new Blob([JSON.stringify(payload, null, 2)], {type:'application/json'});
@@ -1422,30 +1828,43 @@ function saveResults() {
   a.click();
   URL.revokeObjectURL(url);
 
-  // Also save a CSV summary
-  let csv = 'Run,Method,Dot,PctX,PctY,GroundTruthX,GroundTruthY,MeanError_px,MinError_px,MaxError_px,Samples\n';
-  allRuns.forEach((run, ri) => {
-    run.dotResults.forEach(dr => {
-      csv += [ri+1, '"'+run.label+'"', dr.dotIdx+1,
-              dr.pct[0], dr.pct[1], dr.gtX, dr.gtY,
-              dr.mean, dr.min, dr.max, dr.samples.length].join(',') + '\n';
+  // CSV summary
+  let csv;
+  const latestRun = allRuns[latestRunIdx];
+  if (latestRun && latestRun.experimentType === 2) {
+    csv = 'Run,Method,WordIdx,Word,GroundTruthX,GroundTruthY,MeanError_px,MinError_px,MaxError_px,Samples\n';
+    allRuns.filter(r=>r.experimentType===2).forEach((run, ri) => {
+      run.wordResults.forEach(wr => {
+        csv += [ri+1,'"'+run.label+'"',wr.wordIdx+1,'"'+wr.word+'"',
+                wr.gtX,wr.gtY,wr.mean,wr.min,wr.max,wr.samples.length].join(',') + '\n';
+      });
     });
-  });
+  } else {
+    csv = 'Run,Method,Dot,PctX,PctY,GroundTruthX,GroundTruthY,MeanError_px,MinError_px,MaxError_px,Samples\n';
+    allRuns.filter(r=>r.experimentType!==2).forEach((run, ri) => {
+      run.dotResults.forEach(dr => {
+        csv += [ri+1,'"'+run.label+'"',dr.dotIdx+1,
+                dr.pct[0],dr.pct[1],dr.gtX,dr.gtY,
+                dr.mean,dr.min,dr.max,dr.samples.length].join(',') + '\n';
+      });
+    });
+  }
   const csvBlob = new Blob([csv], {type:'text/csv'});
   const csvUrl  = URL.createObjectURL(csvBlob);
   const b = document.createElement('a');
   b.href = csvUrl; b.download = `gaze_experiment_${ts}.csv`; b.click();
   URL.revokeObjectURL(csvUrl);
 
-  // Save heatmap PNGs for the latest run
-  const latestRun = allRuns[latestRunIdx];
+  // Heatmap PNGs for the latest run
   if (latestRun) {
-    latestRun.dotResults.forEach((dr, i) => {
-      if (!dr.heatmapUrl) return;
+    const items = latestRun.experimentType === 2 ? latestRun.wordResults : latestRun.dotResults;
+    const prefix = latestRun.experimentType === 2 ? 'word' : 'dot';
+    items.forEach((item, i) => {
+      if (!item.heatmapUrl) return;
       const a = document.createElement('a');
-      a.href = dr.heatmapUrl;
-      a.download = `heatmap_dot${i+1}_${ts}.png`;
-      setTimeout(() => a.click(), 200 + i * 150); // stagger to avoid browser blocking
+      a.href = item.heatmapUrl;
+      a.download = `heatmap_${prefix}${i+1}_${ts}.png`;
+      setTimeout(() => a.click(), 200 + i * 150);
     });
   }
 
@@ -1456,22 +1875,23 @@ function saveResults() {
    NAVIGATION HELPERS
 ═══════════════════════════════════════════════════════════ */
 function goSelectAnother() {
+  // "Change Method" — full reset back to method selection
   document.body.classList.remove('cursor-hidden');
   if (selectedMethod === 'webgazer' && wgRunning) {
     try { webgazer.addMouseEventListeners(); } catch(_) {}
   }
-  // Stop any ongoing collection
   clearInterval(expSampleId);
   clearTimeout(expDotTimer);
   clearInterval(expCountdownId); expCountdownId = null;
+  clearInterval(exp2SampleId);
+  clearTimeout(exp2WordTimer);
+  clearInterval(exp2CountdownId); exp2CountdownId = null;
   clearInterval(calCollectId);
 
-  // Stop WebGazer if running (optional — keep it if user wants to reuse)
-  // (don't destroy, just unset selection)
-  selectedMethod = null;
-  ['webgazer','iris-linear','iris-poly'].forEach(id => {
-    document.getElementById('mc-'+id).classList.remove('sel');
-  });
+  isCalibrated = false;
+  selectedMethod = null; selectedExperiment = null;
+  ['webgazer','iris-linear','iris-poly'].forEach(id =>
+    document.getElementById('mc-'+id).classList.remove('sel'));
   document.getElementById('btn-start-exp').disabled = true;
 
   updateRunsList();
@@ -1497,11 +1917,13 @@ function updateRunsList() {
     el.className = 'run-item';
     const d = new Date(run.timestamp);
     const timeStr = d.toLocaleTimeString();
+    const expTag = run.experimentType === 2 ? 'Exp2' : 'Exp1';
+    const items  = run.experimentType === 2 ? run.wordResults : run.dotResults;
     el.innerHTML = `
-      <span class="ri-method">${run.label}</span>
+      <span class="ri-method">[${expTag}] ${run.label}</span>
       <span class="ri-dist">~${run.overallMean} px</span>
       <div class="ri-dots">
-        ${run.dotResults.map(dr => `<span class="ri-dot-chip">${dr.mean}</span>`).join('')}
+        ${items.map(it => `<span class="ri-dot-chip">${it.mean}</span>`).join('')}
       </div>
       <span class="ri-time">${timeStr}</span>
     `;
