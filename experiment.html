@@ -553,8 +553,8 @@ const EXP2_PARAGRAPH =
   'By sampling from this structured space VAEs can generate diverse and semantically coherent ' +
   'outputs making them powerful tools for generative modeling in both vision and language domains.';
 const EXP2_WORDS = EXP2_PARAGRAPH.replace(/[.,]/g,'').split(/\s+/).filter(w => w.length > 0);
-const EXP2_WORD_DURATION_MS = 500; // 0.1 s settle + 0.4 s collect
-const EXP2_WORD_SKIP_MS     = 100; // settling pause before data collection
+let EXP2_WORD_DURATION_MS = 300; // updated from UI: settle + collect
+let EXP2_WORD_SKIP_MS     = 100; // updated from UI: settle time
 
 /* ═══════════════════════════════════════════════════════════
    STATE
@@ -1174,15 +1174,26 @@ function showReadyPhase() {
       <li>Press ${hKey} to show/hide the gaze estimation dot</li>
     </ul>`;
   } else {
+    const inStyle = 'width:64px;padding:3px 6px;border-radius:6px;border:1px solid #30363d;background:#0d1117;color:#e6edf3;font-size:.85rem;text-align:center';
     html += `<ul style="color:#8b949e;padding-left:18px;margin:0">
       <li>A paragraph about <span style="color:#e6edf3">Transformers &amp; VAEs</span> is displayed</li>
-      <li>Each word is highlighted one by one for <span style="color:#e6edf3">0.5 seconds</span></li>
       <li><span style="color:#e6edf3">Look at and read aloud</span> each highlighted word</li>
-      <li>First <span style="color:#e6edf3">0.1 s</span> is a settling pause; remaining <span style="color:#e6edf3">0.4 s</span> collect gaze data</li>
       <li>Total: <span style="color:#e6edf3">${EXP2_WORDS.length} words</span></li>
       <li>Mouse cursor is <span style="color:#e6edf3">hidden</span> during the experiment</li>
       <li>Press ${hKey} to show/hide the gaze estimation dot</li>
-    </ul>`;
+    </ul>
+    <div style="margin-top:14px;display:flex;gap:20px;align-items:center;flex-wrap:wrap">
+      <label style="display:flex;align-items:center;gap:8px;color:#8b949e;font-size:.85rem">
+        Settle time (s):
+        <input id="exp2-settle-input" type="number" min="0.05" max="2" step="0.05" value="0.1" style="${inStyle}"
+               onclick="event.stopPropagation()"/>
+      </label>
+      <label style="display:flex;align-items:center;gap:8px;color:#8b949e;font-size:.85rem">
+        Collect time (s):
+        <input id="exp2-collect-input" type="number" min="0.1" max="5" step="0.05" value="0.2" style="${inStyle}"
+               onclick="event.stopPropagation()"/>
+      </label>
+    </div>`;
   }
   document.getElementById('ready-instructions').innerHTML = html;
   showPhase('ph-ready');
@@ -1219,6 +1230,12 @@ function renderHeatmap(samples, gtX, gtY) {
    EXPERIMENT 2 – WORD READING TASK
 ═══════════════════════════════════════════════════════════ */
 function startExperiment2() {
+  // Read user-configured timing
+  const settleS  = parseFloat(document.getElementById('exp2-settle-input')?.value)  || 0.1;
+  const collectS = parseFloat(document.getElementById('exp2-collect-input')?.value) || 0.2;
+  EXP2_WORD_SKIP_MS     = Math.round(Math.max(0.05, settleS)  * 1000);
+  EXP2_WORD_DURATION_MS = EXP2_WORD_SKIP_MS + Math.round(Math.max(0.1, collectS) * 1000);
+
   exp2WordIndex = 0; exp2Results = []; exp2Samples = [];
   // Reset gaze dot button
   gazeVisible = false;
