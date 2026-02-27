@@ -539,14 +539,22 @@ const METHOD_LABELS = {
 
 // ── Experiment 2 constants ────────────────────────────────
 const EXP2_PARAGRAPH =
-  'The Transformer architecture uses self-attention to capture relationships ' +
-  'between all tokens in parallel making training highly scalable. ' +
-  'Variational Autoencoders learn a structured latent space by encoding data ' +
-  'as probability distributions enabling controlled sampling and generation ' +
-  'of novel coherent outputs.';
-const EXP2_WORDS = EXP2_PARAGRAPH.replace(/\./g,'').split(/\s+/).filter(w => w.length > 0);
-const EXP2_WORD_DURATION_MS = 2500; // time each word is highlighted
-const EXP2_WORD_SKIP_MS     = 400;  // settling pause before data collection
+  'The Transformer architecture introduced by Vaswani et al in 2017 revolutionized ' +
+  'natural language processing through its self-attention mechanism which allows each ' +
+  'token to directly attend to every other token in a sequence. ' +
+  'Unlike recurrent networks that process tokens sequentially Transformers operate in ' +
+  'parallel enabling efficient scaling to billions of parameters. ' +
+  'Positional encodings are added to token embeddings so the model retains awareness ' +
+  'of word order despite its non-sequential design. ' +
+  'Variational Autoencoders proposed by Kingma and Welling learn continuous latent ' +
+  'representations by encoding inputs as Gaussian distributions in a lower dimensional space. ' +
+  'During training the model minimizes reconstruction loss while regularizing the latent ' +
+  'space through KL divergence ensuring the learned distribution stays close to a standard normal. ' +
+  'By sampling from this structured space VAEs can generate diverse and semantically coherent ' +
+  'outputs making them powerful tools for generative modeling in both vision and language domains.';
+const EXP2_WORDS = EXP2_PARAGRAPH.replace(/[.,]/g,'').split(/\s+/).filter(w => w.length > 0);
+const EXP2_WORD_DURATION_MS = 900; // 0.4 s settle + 0.5 s collect
+const EXP2_WORD_SKIP_MS     = 400; // settling pause before data collection
 
 /* ═══════════════════════════════════════════════════════════
    STATE
@@ -1168,9 +1176,9 @@ function showReadyPhase() {
   } else {
     html += `<ul style="color:#8b949e;padding-left:18px;margin:0">
       <li>A paragraph about <span style="color:#e6edf3">Transformers &amp; VAEs</span> is displayed</li>
-      <li>Each word is highlighted one by one for <span style="color:#e6edf3">2.5 seconds</span></li>
+      <li>Each word is highlighted one by one for <span style="color:#e6edf3">0.9 seconds</span></li>
       <li><span style="color:#e6edf3">Look at and read aloud</span> each highlighted word</li>
-      <li>First <span style="color:#e6edf3">0.4 s</span> is a settling pause; remaining 2.1 s collect gaze data</li>
+      <li>First <span style="color:#e6edf3">0.4 s</span> is a settling pause; remaining <span style="color:#e6edf3">0.5 s</span> collect gaze data</li>
       <li>Total: <span style="color:#e6edf3">${EXP2_WORDS.length} words</span></li>
       <li>Mouse cursor is <span style="color:#e6edf3">hidden</span> during the experiment</li>
       <li>Press ${hKey} to show/hide the gaze estimation dot</li>
