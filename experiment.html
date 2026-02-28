@@ -1022,7 +1022,7 @@ function showNextDot(){
     clearInterval(expSampleId);clearInterval(expCountdownId);expCountdownId=null;
     dot.classList.remove('show');updateGazeDot(null,null,null);
     METHODS.forEach(m=>{
-      expResults[m].push({gtX:x,gtY:y,pct,samples:[...expSamples[m]],heatmapUrl:renderHeatmap([...expSamples[m]],x,y)});
+      expResults[m].push({gtX:x,gtY:y,pct,samples:[...expSamples[m]]});
     });
     expDotIndex++;setTimeout(showNextDot,500);
   },DOT_DURATION_MS);
@@ -1049,7 +1049,7 @@ function finishExperiment(){
       const dists=r.samples.map(s=>s.dist);
       const mean=dists.length?avg(dists):0;
       return{dotIdx:i,gtX:Math.round(r.gtX),gtY:Math.round(r.gtY),pct:r.pct,
-        samples:r.samples,heatmapUrl:r.heatmapUrl||null,
+        samples:r.samples,heatmapUrl:renderHeatmap(r.samples,r.gtX,r.gtY),
         mean:+mean.toFixed(1),min:+(dists.length?Math.min(...dists):0).toFixed(1),
         max:+(dists.length?Math.max(...dists):0).toFixed(1)};
     });
@@ -1116,7 +1116,7 @@ function showNextWord2(){
     METHODS.forEach(m=>{
       exp2Results[m].push({wordIdx:exp2WordIndex,word:EXP2_WORDS[exp2WordIndex],
         gtX:Math.round(gtX),gtY:Math.round(gtY),
-        samples:[...exp2Samples[m]],heatmapUrl:renderHeatmap([...exp2Samples[m]],gtX,gtY)});
+        samples:[...exp2Samples[m]]});
     });
     exp2WordIndex++;setTimeout(showNextWord2,200);
   },EXP2_WORD_DURATION_MS);
@@ -1142,7 +1142,7 @@ function finishExperiment2(){
       const dists=r.samples.map(s=>s.dist);
       const mean=dists.length?avg(dists):0;
       return{wordIdx:r.wordIdx,word:r.word,gtX:r.gtX,gtY:r.gtY,
-        samples:r.samples,heatmapUrl:r.heatmapUrl||null,
+        samples:r.samples,heatmapUrl:renderHeatmap(r.samples,r.gtX,r.gtY),
         mean:+mean.toFixed(1),min:+(dists.length?Math.min(...dists):0).toFixed(1),
         max:+(dists.length?Math.max(...dists):0).toFixed(1)};
     });
@@ -1198,7 +1198,7 @@ function showNextDirection3(){
     METHODS.forEach(m=>{
       const samps=exp3Samples[m];
       const onScreen=samps.filter(s=>s.x>=0&&s.x<=W&&s.y>=0&&s.y<=H).length;
-      methodData[m]={samples:[...samps],onScreen,total:samps.length,heatmapUrl:renderHeatmapExp3([...samps])};
+      methodData[m]={samples:[...samps],onScreen,total:samps.length};
     });
     exp3Results.push({dirIdx:exp3DirIndex,dirId:dir.id,dirLabel:dir.label,dirArrow:dir.arrow,methods:methodData});
     badge.textContent='✓ Done';badge.style.background='rgba(88,166,255,.2)';badge.style.color='#58a6ff';
@@ -1224,7 +1224,7 @@ function finishExperiment3(){
     const totalSamples=exp3Results.reduce((s,r)=>s+(r.methods[m]?.total||0),0);
     const leakageRate=totalSamples?+(totalOnScreen/totalSamples*100).toFixed(1):0;
     run.results[m]={
-      dirResults:exp3Results.map(r=>({dirIdx:r.dirIdx,dirId:r.dirId,dirLabel:r.dirLabel,dirArrow:r.dirArrow,...r.methods[m]})),
+      dirResults:exp3Results.map(r=>({dirIdx:r.dirIdx,dirId:r.dirId,dirLabel:r.dirLabel,dirArrow:r.dirArrow,...r.methods[m],heatmapUrl:renderHeatmapExp3(r.methods[m].samples||[])})),
       totalOnScreen,totalSamples,leakageRate
     };
   });
