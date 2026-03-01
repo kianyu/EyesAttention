@@ -632,6 +632,7 @@ function stopSelectDraw(){clearTimeout(selectDrawId);selectDrawId=null;}
    UI HELPERS
 ═══════════════════════════════════════════════════════════ */
 function showPhase(id){
+  console.log('[PHASE] switching to',id,'(called from)',new Error().stack.split('\n')[2]?.trim());
   document.querySelectorAll('.phase').forEach(p=>p.classList.remove('active'));
   document.getElementById(id).classList.add('active');
   if(id==='ph-select'){if(!faceLoopId) startFaceLoop();startSelectDraw();}
@@ -799,6 +800,7 @@ function onIrisDotClick(idx){
 }
 
 function startIrisCollection(idx,sx,sy){
+  console.log('[CAL] startIrisCollection dot',idx,'calCollectId before=',calCollectId);
   calCollecting=true;calDotSamples=[];calFrameCount=0;
   const dot=calDotEls[idx];
   dot.classList.remove('active');dot.classList.add('collecting');dot.textContent='…';
@@ -812,9 +814,11 @@ function startIrisCollection(idx,sx,sy){
     document.getElementById('cal-bar-fill').style.width=pct+'%';
     if(calFrameCount>=CAL_COLLECT_FRAMES) finishIrisCalDot(idx,sx,sy);
   },67);
+  console.log('[CAL] calCollectId set to',calCollectId);
 }
 
 function finishIrisCalDot(idx,sx,sy){
+  console.log('[CAL] finishIrisCalDot dot',idx,'samples=',calDotSamples.length,'calCollectId=',calCollectId);
   clearInterval(calCollectId);calCollectId=null;calCollecting=false;
   const dot=calDotEls[idx];
   dot.classList.remove('collecting');dot.classList.add('done');dot.textContent='✓';dot.style.fontSize='';
@@ -841,6 +845,7 @@ function finishIrisCalDot(idx,sx,sy){
 }
 
 function finishIrisCalibration(){
+  console.log('[CAL] finishIrisCalibration() called. irisCalData.length=',irisCalData.length,'calCollectId=',calCollectId);
   if(irisCalData.length>=4){
     calModel_iris_linear=fitModel(
       irisCalData.map(d=>[1,d.lx,d.ly,d.rx,d.ry]),
@@ -856,6 +861,7 @@ function finishIrisCalibration(){
   document.getElementById('cal-bar-fill').style.width='100%';
   document.getElementById('cal-bar-fill').style.background='#3fb950';
   setTimeout(()=>{
+    console.log('[CAL] 800ms timeout fired → showExpSelectPhase');
     document.getElementById('cal-overlay').classList.remove('show');
     document.getElementById('cal-bar-fill').style.background='#f0c000';
     showExpSelectPhase();
@@ -981,6 +987,7 @@ function renderHeatmapExp3(samples){
    EXPERIMENT 1 — FIXATION ACCURACY
 ═══════════════════════════════════════════════════════════ */
 function startExperiment(){
+  console.log('[EXP] startExperiment() called. calCollectId=',calCollectId,'calCollecting=',calCollecting);
   const durS=parseFloat(document.getElementById('exp1-duration-input')?.value)||5;
   DOT_DURATION_MS=Math.round(Math.max(1,durS)*1000);
   expDotIndex=0;
@@ -991,13 +998,16 @@ function startExperiment(){
   if(btn){btn.textContent='Show Gaze [H]';btn.style.color='#58a6ff';btn.style.borderColor='#58a6ff';}
   if(wgRunning) try{webgazer.removeMouseEventListeners();}catch(_){}
   showPhase('ph-experiment');
+  console.log('[EXP] showPhase(ph-experiment) done. Scheduling showNextDot in 500ms.');
   setTimeout(showNextDot,500);
 }
 
 function showNextDot(){
-  if(expDotIndex>=CAL_POSITIONS_PCT.length){finishExperiment();return;}
+  console.log('[EXP] showNextDot() called. expDotIndex=',expDotIndex,'DOT_DURATION_MS=',DOT_DURATION_MS);
+  if(expDotIndex>=CAL_POSITIONS_PCT.length){console.log('[EXP] All dots done → finishExperiment');finishExperiment();return;}
   const pct=CAL_POSITIONS_PCT[expDotIndex];
   const {x,y}=pctToPx(pct);
+  console.log('[EXP] Showing dot',expDotIndex+1,'at',x,y);
   const dot=document.getElementById('exp-dot');
   dot.style.left=x+'px';dot.style.top=y+'px';dot.classList.add('show');
   document.getElementById('exp-progress').textContent='Dot '+(expDotIndex+1)+' / 9';
@@ -1015,16 +1025,21 @@ function showNextDot(){
     if(elapsed>=DOT_DURATION_MS){clearInterval(expCountdownId);expCountdownId=null;}
   },100);
   setTimeout(()=>{
+    console.log('[EXP] SKIP_MS done → starting gaze collection for dot',expDotIndex+1);
     badge.textContent='● Collecting…';badge.className='exp-collect-badge collecting';
     expSampleId=setInterval(collectGazeSample,SAMPLE_INTERVAL);
   },SKIP_MS);
+  console.log('[EXP] Setting expDotTimer for',DOT_DURATION_MS,'ms');
   expDotTimer=setTimeout(()=>{
+    console.log('[EXP] expDotTimer fired for dot',expDotIndex+1,'. Clearing intervals.');
     clearInterval(expSampleId);clearInterval(expCountdownId);expCountdownId=null;
     dot.classList.remove('show');updateGazeDot(null,null,null);
     METHODS.forEach(m=>{
       expResults[m].push({gtX:x,gtY:y,pct,samples:[...expSamples[m]]});
     });
-    expDotIndex++;setTimeout(showNextDot,500);
+    expDotIndex++;
+    console.log('[EXP] expDotIndex now',expDotIndex,'. Scheduling showNextDot in 500ms.');
+    setTimeout(showNextDot,500);
   },DOT_DURATION_MS);
 }
 
@@ -1040,6 +1055,7 @@ function collectGazeSample(){
 }
 
 function finishExperiment(){
+  console.log('[EXP] finishExperiment() called.');
   updateGazeDot(null,null,null);
   document.getElementById('exp-dot').classList.remove('show');
   if(wgRunning) try{webgazer.addMouseEventListeners();}catch(_){}
