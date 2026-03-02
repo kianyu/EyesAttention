@@ -15,8 +15,11 @@
     .phase{display:none;min-height:100vh}
     .phase.active{display:flex;flex-direction:column}
 
-    /* ── Camera widget ───────────────────────────────────── */
-    #cam-widget{margin-top:20px;display:flex;flex-direction:column;align-items:center;gap:6px}
+    /* ── Camera widget (fixed overlay — always in render tree so video keeps decoding) */
+    #cam-widget{position:fixed;top:10px;left:10px;z-index:9000;
+      display:flex;flex-direction:column;align-items:center;gap:6px;
+      visibility:hidden}
+    #cam-widget.cam-visible{visibility:visible}
     #cam-video-wrap{position:relative;width:240px;height:180px;border-radius:10px;border:2px solid #30363d;overflow:hidden;background:#0d1117}
     #cam-preview{width:240px;height:180px;object-fit:cover;display:block;transform:scaleX(-1)}
     #cam-canvas{position:absolute;top:0;left:0;width:240px;height:180px;pointer-events:none;transform:scaleX(-1)}
@@ -216,13 +219,6 @@
     </div>
   </div>
 
-  <div id="cam-widget">
-    <div id="cam-video-wrap">
-      <video id="cam-preview" autoplay playsinline muted></video>
-      <canvas id="cam-canvas"></canvas>
-    </div>
-    <div id="cam-status">Starting camera…</div>
-  </div>
 </div>
 
 <!-- ══════════════════════════════════════════════════════
@@ -753,8 +749,17 @@ function showPhase(id){
   console.log('[PHASE] switching to',id,'(called from)',new Error().stack.split('\n')[2]?.trim());
   document.querySelectorAll('.phase').forEach(p=>p.classList.remove('active'));
   document.getElementById(id).classList.add('active');
-  if(id==='ph-select'){if(!faceLoopId) startFaceLoop();startSelectDraw();}
-  else stopSelectDraw();
+  const camW=document.getElementById('cam-widget');
+  if(id==='ph-select'){
+    if(!faceLoopId) startFaceLoop();
+    startSelectDraw();
+    if(camW) camW.classList.add('cam-visible');
+  } else {
+    stopSelectDraw();
+    // Keep cam-widget hidden by default in other phases (G key to toggle)
+    // but do NOT remove it from DOM — video must stay rendered so MediaPipe gets live frames
+    if(camW) camW.classList.remove('cam-visible');
+  }
 }
 function showToast(msg){
   const t=document.getElementById('toast');
@@ -1143,6 +1148,7 @@ function renderHeatmapExp3(samples){
 ═══════════════════════════════════════════════════════════ */
 function startExperiment(){
   _dbgTick=0;
+  if(!faceLoopId) startFaceLoop();  // ensure face loop is running during experiment
   console.log('[EXP] startExperiment() ─────────────────────');
   console.log('  ridge calData=',irisLinearCalData.length,'model=',calModel_iris_linear?'ok':'NULL');
   console.log('  mlp   calData=',irisPolyCalData.length,  'model=',calModel_iris_poly?'ok':'NULL','mlpTraining=',mlpTraining);
@@ -1229,7 +1235,7 @@ function collectGazeSample(){
 
   METHODS.forEach(m=>{
     const g=getCurrentGaze(m);
-    if(doLog) console.log('[DBG]',m,'→',g?('x='+Math.round(g.x)+' y='+Math.round(g.y)):'NULL','  screen='+window.innerWidth+'×'+window.innerHeight);
+    if(doLog) console.log('[DBG]',METHOD_LABELS[m]||m,'→',g?('x='+Math.round(g.x)+' y='+Math.round(g.y)):'NULL','  screen='+window.innerWidth+'×'+window.innerHeight);
     if(!g||!isFinite(g.x)||!isFinite(g.y)) return;
     expSamples[m].push({t,x:g.x,y:g.y,dist:Math.hypot(g.x-gtX,g.y-gtY)});
     updateGazeDot(m,g.x,g.y);
@@ -1737,7 +1743,13 @@ function saveResults(){
 /* ═══════════════════════════════════════════════════════════
    KEYBOARD + INIT
 ═══════════════════════════════════════════════════════════ */
-document.addEventListener('keydown',e=>{if(e.key==='h'||e.key==='H') toggleGazeDot();});
+document.addEventListener('keydown',e=>{
+  if(e.key==='h'||e.key==='H') toggleGazeDot();
+  if(e.key==='g'||e.key==='G'){
+    const w=document.getElementById('cam-widget');
+    if(w) w.classList.toggle('cam-visible');
+  }
+});
 
 window.addEventListener('load',async()=>{
   try{
@@ -1756,5 +1768,15 @@ window.addEventListener('beforeunload',()=>{
   if(camStream) camStream.getTracks().forEach(t=>t.stop());
 });
 </script>
+
+<!-- Camera widget lives OUTSIDE all phases so the video element is never inside
+     a display:none parent — this keeps Chrome decoding frames for MediaPipe -->
+<div id="cam-widget">
+  <div id="cam-video-wrap">
+    <video id="cam-preview" autoplay playsinline muted></video>
+    <canvas id="cam-canvas"></canvas>
+  </div>
+  <div id="cam-status">Starting camera…</div>
+</div>
 </body>
 </html>
