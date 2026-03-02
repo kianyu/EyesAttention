@@ -432,7 +432,7 @@ const EXP2_PARAGRAPH =
   'space through KL divergence ensuring the learned distribution stays close to a standard normal. ' +
   'By sampling from this structured space VAEs can generate diverse and semantically coherent ' +
   'outputs making them powerful tools for generative modeling in both vision and language domains.';
-const EXP2_WORDS = EXP2_PARAGRAPH.replace(/[.,]/g,'').split(/\s+/).filter(w=>w.length>0);
+const EXP2_WORDS = EXP2_PARAGRAPH.split(/\s+/).filter(w=>w.length>0);
 let EXP2_WORD_DURATION_MS = 300;
 let EXP2_WORD_SKIP_MS     = 100;
 
@@ -483,6 +483,7 @@ let expCountdownId = null;
 let expDotStart    = null;
 
 // Experiment 2 state (method-keyed)
+let _lineReplayStops = []; // cleanup fns for animated line replay canvases
 let exp2WordIndex   = 0;
 let exp2Samples     = {};
 let exp2Results     = {};
@@ -747,6 +748,7 @@ function stopSelectDraw(){clearTimeout(selectDrawId);selectDrawId=null;}
 ═══════════════════════════════════════════════════════════ */
 function showPhase(id){
   console.log('[PHASE] switching to',id,'(called from)',new Error().stack.split('\n')[2]?.trim());
+  if(id!=='ph-results'){_lineReplayStops.forEach(fn=>fn());_lineReplayStops=[];}
   document.querySelectorAll('.phase').forEach(p=>p.classList.remove('active'));
   document.getElementById(id).classList.add('active');
   const camW=document.getElementById('cam-widget');
@@ -1346,7 +1348,7 @@ function finishExperiment2(){
       const dists=r.samples.map(s=>s.dist);
       const mean=dists.length?avg(dists):0;
       return{wordIdx:r.wordIdx,word:r.word,gtX:r.gtX,gtY:r.gtY,
-        samples:r.samples,heatmapUrl:renderHeatmap(r.samples,r.gtX,r.gtY),
+        samples:r.samples,
         mean:+mean.toFixed(1),min:+(dists.length?Math.min(...dists):0).toFixed(1),
         max:+(dists.length?Math.max(...dists):0).toFixed(1)};
     });
@@ -1486,6 +1488,8 @@ function buildGroupedChart(labels,datasetsData,yLabel){
 }
 
 function renderResultsExp1(run,timeStr){
+  _lineReplayStops.forEach(fn=>fn());_lineReplayStops=[];
+  document.getElementById('sec-table').style.display='';
   document.getElementById('res-title').textContent='Exp 1 — Fixation Accuracy';
   document.getElementById('res-subtitle').textContent=timeStr+'   |   Cal: '+run.wgClicksPerDot+' clicks/dot';
   buildSummaryCards(run,mr=>mr.overallMean,()=>'px','Overall Mean Error',
@@ -1530,42 +1534,183 @@ function renderResultsExp1(run,timeStr){
   });
 }
 
+/* Group word results by approximate screen line (cluster by gtY) */
+function groupWordsByLine(wordResults,tolerance=35){
+  const lines=[];
+  wordResults.forEach(wr=>{
+    for(const ln of lines){
+      if(Math.abs(ln.lineY-wr.gtY)<=tolerance){
+        ln.words.push(wr);
+        ln.lineY=ln.words.reduce((s,w)=>s+w.gtY,0)/ln.words.length;
+        return;
+      }
+    }
+    lines.push({lineY:wr.gtY,words:[wr]});
+  });
+  return lines.sort((a,b)=>a.lineY-b.lineY);
+}
+
+/* Animated per-line gaze replay canvas.
+   Returns {wrap:HTMLElement, stop:Function} */
+function buildLineReplayCanvas(lineWords,run){
+  const SW=window.innerWidth||1920, SH=window.innerHeight||945;
+  const CW=880, CH=110;
+  const SPEED=2;                              // 2× real-time playback
+  const wordDurS=EXP2_WORD_DURATION_MS/1000;
+  const stepS=wordDurS/SPEED;                // canvas seconds per word slot
+  const totalS=lineWords.length*stepS;
+  const lineY=lineWords.reduce((s,w)=>s+w.gtY,0)/lineWords.length;
+  const centerY=68;                           // y of gaze baseline in canvas
+  const yScale=(CH*0.7)/SH;                  // screen px → canvas px (y deviation)
+
+  const wrap=document.createElement('div');
+  wrap.style.cssText='margin-bottom:8px';
+
+  // Legend row
+  const legend=document.createElement('div');
+  legend.style.cssText='display:flex;gap:14px;margin-bottom:4px;font-size:.72rem';
+  METHODS.forEach(m=>{
+    const col=METHOD_COLORS[m];
+    legend.innerHTML+=`<span style="display:flex;align-items:center;gap:4px">
+      <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${col}"></span>
+      <span style="color:${col}">${METHOD_LABELS[m]}</span></span>`;
+  });
+  legend.innerHTML+='<span style="color:#8b949e;margin-left:auto;font-size:.7rem">Click to pause · 2× speed</span>';
+
+  const canvas=document.createElement('canvas');
+  canvas.width=CW;canvas.height=CH;
+  canvas.style.cssText='width:100%;border-radius:8px;border:1px solid #30363d;display:block;cursor:pointer';
+
+  let elapsedMs=0,lastTs=null,playing=true,rafId=null,stopped=false;
+
+  function draw(elapsedS){
+    const ctx=canvas.getContext('2d');
+    ctx.fillStyle='#0d1117';ctx.fillRect(0,0,CW,CH);
+
+    const loopT=elapsedS%totalS;
+    const wIdx=Math.min(Math.floor(loopT/stepS),lineWords.length-1);
+    const withinS=(loopT%stepS)*SPEED; // real-time progress within this word
+
+    // Word labels
+    ctx.textAlign='center';
+    lineWords.forEach((wd,i)=>{
+      const cx=(wd.gtX/SW)*CW;
+      const isAct=i===wIdx, isDone=i<wIdx;
+      ctx.font=(isAct?'bold ':'')+'12px "Segoe UI",system-ui,sans-serif';
+      ctx.fillStyle=isAct?'#f0c000':isDone?'rgba(63,185,80,0.55)':'rgba(230,237,243,0.22)';
+      ctx.fillText(wd.word,cx,20);
+    });
+
+    // Baseline
+    ctx.strokeStyle='rgba(48,54,61,0.9)';ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(0,34);ctx.lineTo(CW,34);ctx.stroke();
+
+    // Gaze samples for active word
+    const activeWd=lineWords[wIdx];
+    if(activeWd){
+      METHODS.forEach(m=>{
+        const wr=run.results[m]?.wordResults[activeWd.wordIdx];
+        if(!wr) return;
+        const vis=wr.samples.filter(s=>s.t<=withinS);
+        if(!vis.length) return;
+        const col=METHOD_COLORS[m];
+        const rv=parseInt(col.slice(1,3),16),gv=parseInt(col.slice(3,5),16),bv=parseInt(col.slice(5,7),16);
+        vis.forEach((s,si)=>{
+          const sx=(s.x/SW)*CW;
+          const sy=Math.max(36,Math.min(CH-14, centerY+(s.y-lineY)*yScale));
+          const alpha=0.3+0.7*((si+1)/vis.length);
+          ctx.beginPath();
+          ctx.arc(sx,sy,si===vis.length-1?6:3.5,0,Math.PI*2);
+          ctx.fillStyle=`rgba(${rv},${gv},${bv},${alpha})`;
+          ctx.fill();
+        });
+        // Ring on latest dot
+        const last=vis[vis.length-1];
+        const lx=(last.x/SW)*CW;
+        const ly=Math.max(36,Math.min(CH-14,centerY+(last.y-lineY)*yScale));
+        ctx.beginPath();ctx.arc(lx,ly,9,0,Math.PI*2);
+        ctx.strokeStyle=col;ctx.lineWidth=1.5;ctx.stroke();
+      });
+      // Ground truth crosshair
+      const gx=(activeWd.gtX/SW)*CW;
+      ctx.strokeStyle='rgba(88,166,255,0.4)';ctx.lineWidth=1;
+      ctx.beginPath();ctx.moveTo(gx-8,centerY);ctx.lineTo(gx+8,centerY);ctx.stroke();
+      ctx.beginPath();ctx.moveTo(gx,centerY-8);ctx.lineTo(gx,centerY+8);ctx.stroke();
+    }
+
+    // Progress bar
+    ctx.fillStyle='rgba(88,166,255,0.15)';ctx.fillRect(0,CH-3,CW,3);
+    ctx.fillStyle='#58a6ff';ctx.fillRect(0,CH-3,(loopT/totalS)*CW,3);
+
+    // Pause overlay
+    if(!playing){
+      ctx.fillStyle='rgba(13,17,23,0.55)';ctx.fillRect(0,0,CW,CH);
+      ctx.fillStyle='#e6edf3';ctx.font='13px "Segoe UI",system-ui,sans-serif';
+      ctx.textAlign='center';ctx.fillText('▶ Click to resume',CW/2,CH/2+5);
+    }
+  }
+
+  function animate(ts){
+    if(stopped) return;
+    if(lastTs!==null) elapsedMs+=ts-lastTs;
+    lastTs=ts;
+    draw(elapsedMs/1000);
+    if(playing&&!stopped) rafId=requestAnimationFrame(animate);
+  }
+
+  canvas.onclick=()=>{
+    playing=!playing;
+    if(playing){lastTs=null;rafId=requestAnimationFrame(animate);}
+    else{cancelAnimationFrame(rafId);draw(elapsedMs/1000);}
+  };
+
+  rafId=requestAnimationFrame(animate);
+  wrap.appendChild(legend);
+  wrap.appendChild(canvas);
+  return{wrap,stop:()=>{stopped=true;cancelAnimationFrame(rafId);}};
+}
+
 function renderResultsExp2(run,timeStr){
+  // Stop any running animations from a previous render
+  _lineReplayStops.forEach(fn=>fn());_lineReplayStops=[];
+
   document.getElementById('res-title').textContent='Exp 2 — Reading Task';
   document.getElementById('res-subtitle').textContent=timeStr+'   |   '+EXP2_WORDS.length+' words';
   buildSummaryCards(run,mr=>mr.overallMean,()=>'px','Overall Mean Error',
     mr=>mr.overallMean<80?'#3fb950':mr.overallMean<160?'#f0c000':'#f85149');
 
+  // Bar chart: overall mean error per word (first 30)
   const maxWords=Math.min(30,EXP2_WORDS.length);
   document.getElementById('sec-chart-title').textContent='Mean Gaze Error per Word — All 3 Methods (first '+maxWords+' words)';
   const wordLabels=EXP2_WORDS.slice(0,maxWords).map(w=>'"'+w+'"').concat(['Overall']);
   const datasetsData=METHODS.map(m=>{const mr=run.results[m];return mr?(mr.wordResults.slice(0,maxWords).map(w=>w.mean).concat([mr.overallMean])):Array(maxWords+1).fill(0);});
   buildGroupedChart(wordLabels,datasetsData,'Mean Error (px)');
 
-  document.getElementById('sec-table-title').textContent='Per-Word Results — All 3 Methods';
-  const thead=document.getElementById('results-thead');
-  thead.innerHTML='<th>#</th><th>Word</th>'+METHODS.map(m=>`<th style="color:${METHOD_COLORS[m]}">${METHOD_LABELS[m]} (px)</th>`).join('');
-  const tbody=document.getElementById('results-tbody');tbody.innerHTML='';
-  const nWords=run.results[METHODS[0]]?.wordResults?.length||0;
-  for(let i=0;i<nWords;i++){
-    const tr=document.createElement('tr');
-    const word=run.results[METHODS[0]].wordResults[i]?.word||'–';
-    let cells=`<td>${i+1}</td><td style="color:#8b949e">&ldquo;${word}&rdquo;</td>`;
-    METHODS.forEach(m=>{
-      const wr=run.results[m]?.wordResults[i];
-      const c=wr?(wr.mean<80?'#3fb950':wr.mean<160?'#f0c000':'#f85149'):'#8b949e';
-      cells+=`<td style="color:${c};font-weight:600">${wr?wr.mean:'–'}</td>`;
-    });
-    tr.innerHTML=cells;tbody.appendChild(tr);
-  }
-  const tr=document.createElement('tr');tr.className='total';
-  let tcells='<td colspan="2">Overall Average</td>';
-  METHODS.forEach(m=>{tcells+=`<td>${run.results[m]?.overallMean||'–'}</td>`;});
-  tr.innerHTML=tcells;tbody.appendChild(tr);
-  document.getElementById('sec-heatmaps').style.display='none';
+  // Hide per-word detail table
+  document.getElementById('sec-table').style.display='none';
+
+  // Build per-line animated gaze replay players
+  document.getElementById('sec-heatmaps').style.display='block';
+  document.getElementById('sec-heatmaps-title').textContent='Gaze Replay — Per Line (2× speed · click to pause)';
+  const container=document.getElementById('heatmaps-container');
+  container.innerHTML='';
+
+  const refWords=run.results[METHODS[0]]?.wordResults||[];
+  const lines=groupWordsByLine(refWords,35);
+  lines.forEach((ln,li)=>{
+    const lbl=document.createElement('p');
+    lbl.style.cssText='color:#8b949e;font-size:.78rem;margin:14px 0 3px';
+    lbl.textContent='Line '+(li+1)+' ('+ln.words.length+' words)';
+    container.appendChild(lbl);
+    const {wrap,stop}=buildLineReplayCanvas(ln.words,run);
+    _lineReplayStops.push(stop);
+    container.appendChild(wrap);
+  });
 }
 
 function renderResultsExp3(run,timeStr){
+  _lineReplayStops.forEach(fn=>fn());_lineReplayStops=[];
+  document.getElementById('sec-table').style.display='';
   document.getElementById('res-title').textContent='Exp 3 — Off-Screen Robustness';
   const summaries=METHODS.map(m=>{const mr=run.results[m];return mr?METHOD_LABELS[m]+': '+mr.leakageRate+'%':'–';}).join('  |  ');
   document.getElementById('res-subtitle').textContent=timeStr+'   |   '+summaries+' leakage';
