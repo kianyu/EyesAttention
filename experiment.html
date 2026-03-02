@@ -8,7 +8,6 @@
   <script src="/mediapipe/face_mesh/face_mesh.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.15.0/dist/tf.min.js"></script>
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
     body{font-family:'Segoe UI',system-ui,sans-serif;background:#0d1117;color:#e6edf3;min-height:100vh}
@@ -561,28 +560,35 @@ function extractIrisFeatures(){
   const H=videoEl?(videoEl.videoHeight||480):480;
   const px=pt=>({x:pt.x*W,y:pt.y*H});
 
-  // Left iris
-  const lo=px(lm[33]),li=px(lm[133]),lu=px(lm[160]),ll=px(lm[144]),lc=px(lm[468]);
-  const lew=Math.abs(lo.x-li.x)||1,leh=Math.abs(lu.y-ll.y)||1;
-  const lx=(lc.x-Math.min(lo.x,li.x))/lew,ly=(lc.y-Math.min(lu.y,ll.y))/leh;
-
-  // Right iris
-  const ro=px(lm[362]),ri=px(lm[263]),ru=px(lm[385]),rl=px(lm[373]),rc=px(lm[473]);
-  const rew=Math.abs(ro.x-ri.x)||1,reh=Math.abs(ru.y-rl.y)||1;
-  const rx=(rc.x-Math.min(ro.x,ri.x))/rew,ry=(rc.y-Math.min(ru.y,rl.y))/reh;
-
-  // Average iris position
-  const ax=(lx+rx)/2, ay=(ly+ry)/2;
-
-  // Head-pose proxy: nose tip (lm[1]) relative to face bounding box centre
-  // face width/height from cheek landmarks 234,454 and chin/forehead 152,10
-  const noseTip=px(lm[1]);
+  // Face bounding box (cheeks + forehead/chin)
   const leftCheek=px(lm[234]), rightCheek=px(lm[454]);
   const forehead=px(lm[10]),  chin=px(lm[152]);
   const faceW=Math.abs(rightCheek.x-leftCheek.x)||1;
   const faceH=Math.abs(chin.y-forehead.y)||1;
   const faceCX=(leftCheek.x+rightCheek.x)/2;
   const faceCY=(forehead.y+chin.y)/2;
+
+  // Iris centres
+  const lc=px(lm[468]);
+  const rc=px(lm[473]);
+
+  // Per-eye within-eye position (auxiliary features for MLP)
+  const lo=px(lm[33]),li=px(lm[133]),lu=px(lm[160]),ll=px(lm[144]);
+  const lew=Math.abs(lo.x-li.x)||1,leh=Math.abs(lu.y-ll.y)||1;
+  const lx=(lc.x-Math.min(lo.x,li.x))/lew,ly=(lc.y-Math.min(lu.y,ll.y))/leh;
+
+  const ro=px(lm[362]),ri=px(lm[263]),ru=px(lm[385]),rl=px(lm[373]);
+  const rew=Math.abs(ro.x-ri.x)||1,reh=Math.abs(ru.y-rl.y)||1;
+  const rx=(rc.x-Math.min(ro.x,ri.x))/rew,ry=(rc.y-Math.min(ru.y,rl.y))/reh;
+
+  // Average iris position normalised to face bounding box (primary gaze signal)
+  // Range ~±0.25 for typical screen gaze — 3× more variance than within-eye (~±0.05)
+  const avgIrisX=(lc.x+rc.x)/2, avgIrisY=(lc.y+rc.y)/2;
+  const ax=(avgIrisX-faceCX)/faceW;
+  const ay=(avgIrisY-faceCY)/faceH;
+
+  // Head-pose proxy: nose tip (lm[1]) relative to face bounding box centre
+  const noseTip=px(lm[1]);
   const nx=(noseTip.x-faceCX)/faceW;  // -0.5…0.5, positive = face turned right
   const ny=(noseTip.y-faceCY)/faceH;  // pitch proxy
 
@@ -592,13 +598,16 @@ function extractIrisFeatures(){
 /* ═══════════════════════════════════════════════════════════
    GAZE ESTIMATION (per method)
 ═══════════════════════════════════════════════════════════ */
-// Build the 7-feature Ridge vector: [1, ax, ay, nx, ny, ax·nx, ay·ny]
+// Build the 5-feature Ridge vector: [1, ax, ay, nx, ny]
+// ax/ay are face-box-normalised iris position (~±0.25 range)
+// Cross terms removed — they are near-zero when head is still during calibration
 function makeRidgeFeatureVector(feat){
   const {ax,ay,nx,ny}=feat;
-  return[1,ax,ay,nx,ny,ax*nx,ay*ny];
+  return[1,ax,ay,nx,ny];
 }
 // Build the 8-feature MLP vector (no bias term, TF handles it):
 // [ax, ay, nx, ny, lx, ly, rx, ry]
+// ax/ay are face-box-normalised iris position (same as Ridge); lx/ly/rx/ry are within-eye auxiliary
 function makeMlpFeatureVector(feat){
   return[feat.ax,feat.ay,feat.nx,feat.ny,feat.lx,feat.ly,feat.rx,feat.ry];
 }
@@ -966,8 +975,8 @@ function onIrisCalDotClick(idx){
 
 function finishIrisLinearCalibration(){
   console.log('[CAL] finishRidgeGaze. data=',irisLinearCalData.length);
-  if(irisLinearCalData.length>=7){
-    // Ridge regression with 7-feature head-pose-corrected vector, lambda=0.1
+  if(irisLinearCalData.length>=5){
+    // Ridge regression with 5-feature face-box-normalised vector, lambda=0.1
     calModel_iris_linear=fitModel(
       irisLinearCalData.map(d=>makeRidgeFeatureVector(d)),
       irisLinearCalData.map(d=>[d.sx,d.sy]),
