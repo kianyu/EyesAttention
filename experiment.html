@@ -603,18 +603,30 @@ function makeMlpFeatureVector(feat){
   return[feat.ax,feat.ay,feat.nx,feat.ny,feat.lx,feat.ly,feat.rx,feat.ry];
 }
 
+let _ridgeNullLogged=false, _mlpNullLogged=false, _featNullLogged=false;
 function getCurrentGaze(method){
   if(method==='webgazer') return wgGaze?{...wgGaze}:null;
   const feat=extractIrisFeatures();
-  if(!feat) return null;
+  if(!feat){
+    if(!_featNullLogged){console.warn('[getCurrentGaze] extractIrisFeatures() returned NULL (logged once)');_featNullLogged=true;}
+    return null;
+  }
 
   if(method==='iris-linear'){
     // Ridge Gaze — synchronous
-    if(!calModel_iris_linear) return null;
-    return modelPredict(calModel_iris_linear, makeRidgeFeatureVector(feat));
+    if(!calModel_iris_linear){
+      if(!_ridgeNullLogged){console.warn('[getCurrentGaze] calModel_iris_linear is NULL — Ridge Gaze has no model');_ridgeNullLogged=true;}
+      return null;
+    }
+    const pred=modelPredict(calModel_iris_linear, makeRidgeFeatureVector(feat));
+    return pred;
   } else {
     // MLP Gaze — synchronous inference via tf.tidy
-    if(!calModel_iris_poly||mlpTraining) return null;
+    if(!calModel_iris_poly){
+      if(!_mlpNullLogged){console.warn('[getCurrentGaze] calModel_iris_poly is NULL — MLP Gaze has no model');_mlpNullLogged=true;}
+      return null;
+    }
+    if(mlpTraining) return null;
     try{
       const fv=makeMlpFeatureVector(feat);
       const result=tf.tidy(()=>{
@@ -624,7 +636,10 @@ function getCurrentGaze(method){
       const W=calModel_iris_poly._scaleW||window.innerWidth;
       const H=calModel_iris_poly._scaleH||window.innerHeight;
       return{x:result[0]*W, y:result[1]*H};
-    }catch(_){return null;}
+    }catch(e){
+      console.error('[getCurrentGaze] MLP inference error:',e);
+      return null;
+    }
   }
 }
 
@@ -1117,7 +1132,14 @@ function renderHeatmapExp3(samples){
    EXPERIMENT 1 — FIXATION ACCURACY
 ═══════════════════════════════════════════════════════════ */
 function startExperiment(){
-  console.log('[EXP] startExperiment() called. irisLinearData=',irisLinearCalData.length,'irisPolyData=',irisPolyCalData.length,'linearModel=',calModel_iris_linear?'ok':'null','polyModel=',calModel_iris_poly?'ok':'null');
+  _dbgTick=0;
+  console.log('[EXP] startExperiment() ─────────────────────');
+  console.log('  ridge calData=',irisLinearCalData.length,'model=',calModel_iris_linear?'ok':'NULL');
+  console.log('  mlp   calData=',irisPolyCalData.length,  'model=',calModel_iris_poly?'ok':'NULL','mlpTraining=',mlpTraining);
+  console.log('  faceLoopId=',faceLoopId,'currentLM=',currentLM?'ok('+currentLM.length+')':'NULL');
+  console.log('  wgRunning=',wgRunning,'wgGaze=',wgGaze);
+  // Log ridge model coefficients if available
+  if(calModel_iris_linear) console.log('  ridge theta_x=',calModel_iris_linear.theta_x,'theta_y=',calModel_iris_linear.theta_y);
   const durS=parseFloat(document.getElementById('exp1-duration-input')?.value)||5;
   DOT_DURATION_MS=Math.round(Math.max(1,durS)*1000);
   expDotIndex=0;
@@ -1173,12 +1195,32 @@ function showNextDot(){
   },DOT_DURATION_MS);
 }
 
+let _dbgTick=0;
 function collectGazeSample(){
   const pct=CAL_POSITIONS_PCT[expDotIndex];
   const {x:gtX,y:gtY}=pctToPx(pct);
   const t=(performance.now()-expDotStart-SKIP_MS)/1000;
+  _dbgTick++;
+  const doLog=(_dbgTick%15===1); // ~once per second at 15 fps
+
+  if(doLog){
+    const lm=currentLM;
+    const feat=extractIrisFeatures();
+    console.log(
+      '[DBG collectGazeSample] tick='+_dbgTick,
+      'dot='+(expDotIndex+1),
+      'currentLM='+(lm?'ok('+lm.length+')':'NULL'),
+      'feat='+(feat?'{ax='+feat.ax.toFixed(3)+',ay='+feat.ay.toFixed(3)+',nx='+feat.nx.toFixed(3)+',ny='+feat.ny.toFixed(3)+'}'  :'NULL'),
+      'ridge_model='+(calModel_iris_linear?'ok':'NULL'),
+      'mlp_model='+(calModel_iris_poly?'ok':'NULL'),
+      'mlpTraining='+mlpTraining
+    );
+  }
+
   METHODS.forEach(m=>{
-    const g=getCurrentGaze(m);if(!g||!isFinite(g.x)||!isFinite(g.y)) return;
+    const g=getCurrentGaze(m);
+    if(doLog) console.log('[DBG]',m,'→',g?('x='+Math.round(g.x)+' y='+Math.round(g.y)):'NULL','  screen='+window.innerWidth+'×'+window.innerHeight);
+    if(!g||!isFinite(g.x)||!isFinite(g.y)) return;
     expSamples[m].push({t,x:g.x,y:g.y,dist:Math.hypot(g.x-gtX,g.y-gtY)});
     updateGazeDot(m,g.x,g.y);
   });
