@@ -158,8 +158,25 @@
     .hm-row-label{font-size:.72rem;color:#8b949e;padding:6px 0 2px;font-weight:600}
     #toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#238636;color:#fff;padding:10px 24px;border-radius:8px;font-size:.88rem;z-index:9999;display:none;pointer-events:none}
 
+    /* ── Experiment 4 — Cognitive Load ─────────────────────── */
+    #ph-experiment4{position:relative;background:#0d1117;align-items:center;justify-content:center}
+    #exp4-task{font-size:4rem;font-weight:800;color:#e6edf3;text-align:center;min-height:100px;display:flex;align-items:center;justify-content:center;max-width:700px;padding:0 20px}
+    #exp4-phase-label{font-size:.82rem;font-weight:700;text-transform:uppercase;letter-spacing:2px;color:#8b949e;margin-bottom:20px}
+    #exp4-status{position:fixed;top:20px;right:24px;background:rgba(22,27,34,.92);border:1px solid #30363d;border-radius:10px;padding:12px 20px;font-size:.82rem;color:#8b949e;z-index:820;min-width:150px;text-align:right}
+    #exp4-timer{font-size:1.2rem;font-weight:700;color:#e6edf3;margin-top:12px;text-align:center}
+
+    /* ── Experiment 5 — Luminance Response ─────────────────── */
+    #ph-experiment5{position:relative;align-items:center;justify-content:center}
+    #exp5-bg{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;transition:background .4s ease}
+    #exp5-status{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);border-radius:10px;padding:10px 28px;font-size:.82rem;z-index:820;text-align:center;white-space:nowrap;transition:background .4s,color .4s,border-color .4s}
+    #exp5-fixation{font-size:5rem;font-weight:300;line-height:1;transition:color .4s;pointer-events:none;user-select:none}
+
+    /* ── Tags (new) ─────────────────────────────────────────── */
+    .tag-exp4{background:rgba(188,140,255,.2);color:#bc8cff}
+    .tag-exp5{background:rgba(255,140,80,.2);color:#ff8c50}
+
     /* ── Experiment / ready selection ────────────────────── */
-    .exp-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;max-width:1020px;width:100%;margin:0 auto 28px}
+    .exp-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:18px;max-width:1100px;width:100%;margin:0 auto 28px}
     .ec{background:#161b22;border:2px solid #30363d;border-radius:12px;padding:24px 20px;cursor:pointer;transition:border-color .2s,transform .15s;text-align:left}
     .ec:hover{border-color:#58a6ff;transform:translateY(-2px)}
     .ec h3{color:#58a6ff;font-size:1rem;margin-bottom:8px}
@@ -275,6 +292,16 @@
       <h3>Off-Screen Robustness</h3>
       <p>Look outside the screen in 4 directions for 5 s each. Counts how many gaze estimates land on-screen — fewer is better.</p>
     </div>
+    <div class="ec" onclick="selectExperiment(4)">
+      <span class="tag tag-exp4">Experiment 4</span>
+      <h3>Cognitive Load</h3>
+      <p>Easy counting vs. serial-7 subtraction. Pupils dilate under mental effort — measures PIR (pupil-to-iris ratio) across task difficulty levels. No gaze calibration needed.</p>
+    </div>
+    <div class="ec" onclick="selectExperiment(5)">
+      <span class="tag tag-exp5">Experiment 5</span>
+      <h3>Luminance Response</h3>
+      <p>Screen cycles grey → white → grey → black → grey. Pupils constrict in bright light and dilate in darkness — validates the pupil size estimator via the pupillary light reflex.</p>
+    </div>
   </div>
   <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap">
     <button class="btn btn-grey" onclick="doRecalibrate()">↺ Recalibrate</button>
@@ -342,6 +369,33 @@
     <div id="exp3-badge">Waiting…</div>
     <button id="exp3-proceed-btn" onclick="exp3Proceed()">Next direction →</button>
     <div id="exp3-progress"></div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════
+     PHASE 4c – Experiment 4 (Cognitive Load)
+══════════════════════════════════════════════════════════ -->
+<div id="ph-experiment4" class="phase">
+  <div id="exp4-phase-label">Baseline</div>
+  <div id="exp4-task">+</div>
+  <div id="exp4-timer">–</div>
+  <div id="exp4-status">
+    <div>PIR <span id="exp4-pir" style="color:#e6edf3;font-weight:700">–</span></div>
+    <div id="exp4-progress" style="margin-top:4px;font-size:.72rem"></div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════
+     PHASE 4d – Experiment 5 (Luminance Response)
+══════════════════════════════════════════════════════════ -->
+<div id="ph-experiment5" class="phase">
+  <div id="exp5-bg" style="background:#7f7f7f">
+    <div id="exp5-fixation" style="color:rgba(128,128,128,0.4)">+</div>
+  </div>
+  <div id="exp5-status" style="background:rgba(0,0,0,.6);border:1px solid rgba(255,255,255,.2);color:#fff">
+    <span id="exp5-phase" style="font-weight:700">Baseline</span>
+    &nbsp;·&nbsp;PIR <span id="exp5-pir" style="font-weight:700">–</span>
+    &nbsp;·&nbsp;<span id="exp5-timer">–</span>
   </div>
 </div>
 
@@ -417,6 +471,24 @@ const EXP3_DIRECTIONS = [
 ];
 const EXP3_DURATION_MS = 5000;
 const EXP3_SKIP_MS     = 500;
+
+/* ── Experiment 4 — Cognitive Load phases ────────────────── */
+const EXP4_PHASES=[
+  {name:'baseline',label:'Baseline',  task:'+',  dur:10000,color:'rgba(88,166,255,0.13)'},
+  {name:'easy',    label:'Easy Task', task:null, dur:20000,color:'rgba(63,185,80,0.13)'},
+  {name:'rest',    label:'Rest',      task:'+',  dur:8000, color:'rgba(88,166,255,0.13)'},
+  {name:'hard',    label:'Hard Task', task:null, dur:20000,color:'rgba(248,81,73,0.13)'},
+  {name:'final',   label:'Final Rest',task:'+',  dur:10000,color:'rgba(88,166,255,0.13)'},
+];
+
+/* ── Experiment 5 — Luminance Response phases ────────────── */
+const EXP5_PHASES=[
+  {name:'baseline', label:'Baseline',  bg:'#7f7f7f',fixColor:'rgba(128,128,128,0.4)', dur:5000, color:'rgba(127,127,127,0.2)'},
+  {name:'bright',   label:'Bright',    bg:'#ffffff',fixColor:'rgba(200,200,200,0.6)', dur:5000, color:'rgba(230,230,230,0.3)'},
+  {name:'recover1', label:'Recovery',  bg:'#7f7f7f',fixColor:'rgba(128,128,128,0.4)', dur:5000, color:'rgba(127,127,127,0.2)'},
+  {name:'dark',     label:'Dark',      bg:'#000000',fixColor:'rgba(60,60,60,0.5)',    dur:5000, color:'rgba(20,20,20,0.4)'},
+  {name:'recover2', label:'Recovery',  bg:'#7f7f7f',fixColor:'rgba(128,128,128,0.4)', dur:5000, color:'rgba(127,127,127,0.2)'},
+];
 
 const EXP2_PARAGRAPH =
   'The Transformer architecture introduced by Vaswani et al in 2017 revolutionized ' +
@@ -500,6 +572,25 @@ let exp3SampleId    = null;
 let exp3TimerId     = null;
 let exp3CountdownId = null;
 let exp3DirStart    = null;
+
+// Experiment 4 state (cognitive load)
+let _pupilCanvas    = null;
+let _pupilCtx       = null;
+let exp4PhaseIdx    = 0;
+let exp4PhaseData   = [];
+let exp4StartT      = 0;
+let exp4SampleId    = null;
+let exp4TaskId      = null;
+let exp4TimerId     = null;
+let exp4PirSmoothed = null;
+
+// Experiment 5 state (luminance response)
+let exp5PhaseIdx    = 0;
+let exp5PhaseData   = [];
+let exp5StartT      = 0;
+let exp5SampleId    = null;
+let exp5TimerId     = null;
+let exp5PirSmoothed = null;
 
 // Chart instances
 let compChartInst  = null;
@@ -1058,6 +1149,8 @@ function startCurrentExperiment(){
   if(selectedExperiment===1) startExperiment();
   else if(selectedExperiment===2) startExperiment2();
   else if(selectedExperiment===3) startExperiment3();
+  else if(selectedExperiment===4) startExperiment4();
+  else if(selectedExperiment===5) startExperiment5();
 }
 
 function showReadyPhase(){
@@ -1103,6 +1196,26 @@ function showReadyPhase(){
       <li>After 5 s, click <span style="color:#e6edf3">Next</span> to proceed</li>
       <li>4 directions: <span style="color:#e6edf3">Right → Left → Up → Down</span></li>
       <li>Metric: on-screen gaze points while looking away — <span style="color:#e6edf3">fewer = better</span></li>
+    </ul>`;
+  } else if(selectedExperiment===4){
+    const totalSec=EXP4_PHASES.reduce((s,p)=>s+p.dur/1000,0);
+    html+=`<ul style="color:#8b949e;padding-left:18px;margin:0">
+      <li><span style="color:#e6edf3">No gaze calibration needed</span> — uses pupil size only (MediaPipe)</li>
+      <li>Total duration: <span style="color:#e6edf3">${totalSec} s</span> across ${EXP4_PHASES.length} phases</li>
+      <li><span style="color:#58a6ff">Baseline</span> → <span style="color:#3fb950">Easy counting</span> → <span style="color:#58a6ff">Rest</span> → <span style="color:#f85149">Hard serial‑7</span> → <span style="color:#58a6ff">Final rest</span></li>
+      <li>A fixation cross (+) is shown; <span style="color:#e6edf3">keep your gaze on it</span></li>
+      <li>During task phases, a number is shown — follow the on-screen instructions</li>
+      <li>Metric: <span style="color:#e6edf3">PIR (Pupil–Iris Ratio)</span> — cognitive load causes pupil dilation</li>
+    </ul>`;
+  } else if(selectedExperiment===5){
+    const totalSec5=EXP5_PHASES.reduce((s,p)=>s+p.dur/1000,0);
+    html+=`<ul style="color:#8b949e;padding-left:18px;margin:0">
+      <li><span style="color:#e6edf3">No gaze calibration needed</span> — uses pupil size only (MediaPipe)</li>
+      <li>Total duration: <span style="color:#e6edf3">${totalSec5} s</span> across ${EXP5_PHASES.length} phases</li>
+      <li><span style="color:#58a6ff">Baseline</span> → <span style="color:#f0c000">Bright</span> → <span style="color:#58a6ff">Recovery</span> → <span style="color:#8b949e">Dark</span> → <span style="color:#58a6ff">Recovery</span></li>
+      <li><span style="color:#e6edf3">Keep your eyes open</span> and look at the fixation cross</li>
+      <li>Screen brightness changes — do <span style="color:#e6edf3">not</span> squint or look away</li>
+      <li>Metric: <span style="color:#e6edf3">PIR (Pupil–Iris Ratio)</span> — bright light constricts, darkness dilates</li>
     </ul>`;
   }
   document.getElementById('ready-instructions').innerHTML=html;
@@ -1439,6 +1552,202 @@ function finishExperiment3(){
 }
 
 /* ═══════════════════════════════════════════════════════════
+   PUPIL SIZE ESTIMATION  (Experiments 4 & 5)
+   Uses MediaPipe iris landmarks + pixel-level radial scan
+   Returns {pir, pupilPx, irisPx} or null
+═══════════════════════════════════════════════════════════ */
+function getPupilCtx(){
+  const W=videoEl?.videoWidth||640, H=videoEl?.videoHeight||480;
+  if(!_pupilCanvas||_pupilCanvas.width!==W||_pupilCanvas.height!==H){
+    _pupilCanvas=document.createElement('canvas');
+    _pupilCanvas.width=W;_pupilCanvas.height=H;
+    _pupilCtx=_pupilCanvas.getContext('2d',{willReadFrequently:true});
+  }
+  return _pupilCtx;
+}
+function estimatePupilRadius(ctx,center,irisR,W,H){
+  const cx=Math.round(center.x),cy=Math.round(center.y);
+  const r=Math.max(2,Math.round(irisR));
+  const x0=Math.max(0,cx-r),y0=Math.max(0,cy-r);
+  const w=Math.min(2*r+1,W-x0),h=Math.min(2*r+1,H-y0);
+  if(w<4||h<4) return r*0.32;
+  try{
+    const data=ctx.getImageData(x0,y0,w,h).data;
+    const lcx=cx-x0,lcy=cy-y0;
+    // Sample iris rim (outer ~78% of radius) for iris brightness reference
+    let rimB=0,rimN=0;
+    for(let a=0;a<360;a+=20){
+      const rad=a*Math.PI/180;
+      const rx=Math.round(lcx+r*0.78*Math.cos(rad)),ry=Math.round(lcy+r*0.78*Math.sin(rad));
+      if(rx>=0&&rx<w&&ry>=0&&ry<h){const i=(ry*w+rx)*4;rimB+=(data[i]+data[i+1]+data[i+2])/3;rimN++;}
+    }
+    rimB=rimN>0?rimB/rimN:128;
+    // Center (pupil) brightness
+    const ci=(lcy*w+lcx)*4;
+    const cB=(data[ci]+data[ci+1]+data[ci+2])/3;
+    const thresh=cB+(rimB-cB)*0.40; // 40% between pupil darkness and iris brightness
+    // Radial scan outward from center — find first pixel above threshold
+    let totR=0,n=0;
+    for(let a=0;a<360;a+=15){
+      const rad=a*Math.PI/180;
+      for(let d=1;d<=r;d++){
+        const rx=Math.round(lcx+d*Math.cos(rad)),ry=Math.round(lcy+d*Math.sin(rad));
+        if(rx<0||rx>=w||ry<0||ry>=h){totR+=d-1;n++;break;}
+        const i=(ry*w+rx)*4;
+        const b=(data[i]+data[i+1]+data[i+2])/3;
+        if(b>=thresh){totR+=d;n++;break;}
+        if(d===r){totR+=r*0.85;n++;}
+      }
+    }
+    return n>0?totR/n:r*0.32;
+  }catch(_){return r*0.32;}
+}
+function estimatePupilPIR(){
+  if(!currentLM||currentLM.length<478||!videoEl||videoEl.readyState<2) return null;
+  const lm=currentLM;
+  const W=videoEl.videoWidth||640,H=videoEl.videoHeight||480;
+  const px=pt=>({x:pt.x*W,y:pt.y*H});
+  // Left iris landmarks: 468=center, 469=left, 470=top, 471=right, 472=bottom
+  const lc=px(lm[468]),ll=px(lm[469]),lt=px(lm[470]),lr=px(lm[471]),lb=px(lm[472]);
+  const lIR=(Math.hypot(lr.x-ll.x,lr.y-ll.y)/2+Math.hypot(lt.x-lb.x,lt.y-lb.y)/2)/2;
+  // Right iris landmarks: 473=center, 474=left, 475=top, 476=right, 477=bottom
+  const rc=px(lm[473]),rl=px(lm[474]),rt=px(lm[475]),rr=px(lm[476]),rb=px(lm[477]);
+  const rIR=(Math.hypot(rr.x-rl.x,rr.y-rl.y)/2+Math.hypot(rt.x-rb.x,rt.y-rb.y)/2)/2;
+  if(lIR<2||rIR<2) return null;
+  const ctx=getPupilCtx();
+  ctx.drawImage(videoEl,0,0,W,H);
+  const lPR=estimatePupilRadius(ctx,lc,lIR,W,H);
+  const rPR=estimatePupilRadius(ctx,rc,rIR,W,H);
+  const avgIR=(lIR+rIR)/2, avgPR=(lPR+rPR)/2;
+  const pir=Math.min(0.92,Math.max(0.05,avgPR/avgIR));
+  return{pir,pupilPx:+avgPR.toFixed(2),irisPx:+avgIR.toFixed(2)};
+}
+
+/* ═══════════════════════════════════════════════════════════
+   EXPERIMENT 4 — COGNITIVE LOAD
+═══════════════════════════════════════════════════════════ */
+function startExperiment4(){
+  exp4PhaseIdx=0;
+  exp4PhaseData=EXP4_PHASES.map(p=>({...p,startT:0,endT:0,samples:[],mean:0}));
+  exp4StartT=performance.now();
+  exp4PirSmoothed=null;
+  if(!faceLoopId) startFaceLoop();
+  showPhase('ph-experiment4');
+  runExp4Phase(0);
+}
+function runExp4Phase(idx){
+  if(idx>=EXP4_PHASES.length){finishExperiment4();return;}
+  exp4PhaseIdx=idx;
+  const ph=EXP4_PHASES[idx];
+  exp4PhaseData[idx].startT=(performance.now()-exp4StartT)/1000;
+  // Update phase label and color
+  const lbl=document.getElementById('exp4-phase-label');
+  lbl.textContent=ph.label;
+  lbl.style.color=ph.name==='hard'?'#f85149':ph.name==='easy'?'#3fb950':'#58a6ff';
+  // Task display
+  clearInterval(exp4TaskId);
+  const taskEl=document.getElementById('exp4-task');
+  if(ph.name==='easy'){
+    let n=1;taskEl.textContent=n;
+    exp4TaskId=setInterval(()=>{n=n>=20?1:n+1;taskEl.textContent=n;},1000);
+  }else if(ph.name==='hard'){
+    let n=200;taskEl.innerHTML=n+' &minus; 7 = ?';
+    exp4TaskId=setInterval(()=>{n=n-7;if(n<0)n=200;taskEl.innerHTML=n+' &minus; 7 = ?';},3000);
+  }else{
+    taskEl.textContent='+';
+  }
+  // Progress
+  document.getElementById('exp4-progress').textContent='Phase '+(idx+1)+'/'+EXP4_PHASES.length+' · '+Math.round(ph.dur/1000)+'s';
+  // Countdown
+  clearInterval(exp4TimerId);
+  let rem=ph.dur;
+  const timerEl=document.getElementById('exp4-timer');
+  timerEl.textContent=Math.ceil(rem/1000)+'s';
+  exp4TimerId=setInterval(()=>{rem-=100;timerEl.textContent=Math.ceil(Math.max(0,rem)/1000)+'s';if(rem<=0)clearInterval(exp4TimerId);},100);
+  // PIR sampling
+  clearInterval(exp4SampleId);
+  exp4SampleId=setInterval(()=>{
+    const res=estimatePupilPIR();if(!res)return;
+    exp4PirSmoothed=exp4PirSmoothed===null?res.pir:0.75*exp4PirSmoothed+0.25*res.pir;
+    const t=(performance.now()-exp4StartT)/1000;
+    exp4PhaseData[idx].samples.push({t,pir:+exp4PirSmoothed.toFixed(4)});
+    document.getElementById('exp4-pir').textContent=exp4PirSmoothed.toFixed(3);
+  },100);
+  setTimeout(()=>{
+    clearInterval(exp4SampleId);clearInterval(exp4TaskId);
+    exp4PhaseData[idx].endT=(performance.now()-exp4StartT)/1000;
+    const pirs=exp4PhaseData[idx].samples.map(s=>s.pir);
+    exp4PhaseData[idx].mean=pirs.length?+(avg(pirs)).toFixed(4):0;
+    runExp4Phase(idx+1);
+  },ph.dur);
+}
+function finishExperiment4(){
+  clearInterval(exp4SampleId);clearInterval(exp4TaskId);clearInterval(exp4TimerId);
+  const run={experimentType:4,timestamp:new Date().toISOString(),phases:exp4PhaseData};
+  allRuns.push(run);latestRunIdx=allRuns.length-1;
+  stopFaceLoop();renderResults(latestRunIdx);showPhase('ph-results');updateRunsList();
+}
+
+/* ═══════════════════════════════════════════════════════════
+   EXPERIMENT 5 — LUMINANCE RESPONSE
+═══════════════════════════════════════════════════════════ */
+function startExperiment5(){
+  exp5PhaseIdx=0;
+  exp5PhaseData=EXP5_PHASES.map(p=>({...p,startT:0,endT:0,samples:[],mean:0}));
+  exp5StartT=performance.now();
+  exp5PirSmoothed=null;
+  if(!faceLoopId) startFaceLoop();
+  showPhase('ph-experiment5');
+  runExp5Phase(0);
+}
+function runExp5Phase(idx){
+  if(idx>=EXP5_PHASES.length){finishExperiment5();return;}
+  exp5PhaseIdx=idx;
+  const ph=EXP5_PHASES[idx];
+  exp5PhaseData[idx].startT=(performance.now()-exp5StartT)/1000;
+  const bg=document.getElementById('exp5-bg');
+  const st=document.getElementById('exp5-status');
+  const fix=document.getElementById('exp5-fixation');
+  bg.style.background=ph.bg;
+  fix.style.color=ph.fixColor;
+  const isBright=ph.name==='bright';
+  st.style.background=isBright?'rgba(255,255,255,.75)':'rgba(0,0,0,.6)';
+  st.style.borderColor=isBright?'rgba(0,0,0,.18)':'rgba(255,255,255,.2)';
+  st.style.color=isBright?'#222':'#fff';
+  document.getElementById('exp5-phase').textContent=ph.label;
+  // Countdown
+  clearInterval(exp5TimerId);
+  let rem=ph.dur;
+  const timerEl=document.getElementById('exp5-timer');
+  timerEl.textContent=Math.ceil(rem/1000)+'s';
+  exp5TimerId=setInterval(()=>{rem-=100;timerEl.textContent=Math.ceil(Math.max(0,rem)/1000)+'s';if(rem<=0)clearInterval(exp5TimerId);},100);
+  // PIR sampling
+  clearInterval(exp5SampleId);
+  exp5SampleId=setInterval(()=>{
+    const res=estimatePupilPIR();if(!res)return;
+    exp5PirSmoothed=exp5PirSmoothed===null?res.pir:0.75*exp5PirSmoothed+0.25*res.pir;
+    const t=(performance.now()-exp5StartT)/1000;
+    exp5PhaseData[idx].samples.push({t,pir:+exp5PirSmoothed.toFixed(4)});
+    document.getElementById('exp5-pir').textContent=exp5PirSmoothed.toFixed(3);
+  },100);
+  setTimeout(()=>{
+    clearInterval(exp5SampleId);
+    exp5PhaseData[idx].endT=(performance.now()-exp5StartT)/1000;
+    const pirs=exp5PhaseData[idx].samples.map(s=>s.pir);
+    exp5PhaseData[idx].mean=pirs.length?+(avg(pirs)).toFixed(4):0;
+    runExp5Phase(idx+1);
+  },ph.dur);
+}
+function finishExperiment5(){
+  clearInterval(exp5SampleId);clearInterval(exp5TimerId);
+  // Restore grey background
+  const bg=document.getElementById('exp5-bg');if(bg)bg.style.background='#7f7f7f';
+  const run={experimentType:5,timestamp:new Date().toISOString(),phases:exp5PhaseData};
+  allRuns.push(run);latestRunIdx=allRuns.length-1;
+  stopFaceLoop();renderResults(latestRunIdx);showPhase('ph-results');updateRunsList();
+}
+
+/* ═══════════════════════════════════════════════════════════
    RESULTS RENDERING
 ═══════════════════════════════════════════════════════════ */
 function renderResults(runIdx){
@@ -1450,6 +1759,8 @@ function renderResults(runIdx){
   if(run.experimentType===1) renderResultsExp1(run,timeStr);
   else if(run.experimentType===2) renderResultsExp2(run,timeStr);
   else if(run.experimentType===3) renderResultsExp3(run,timeStr);
+  else if(run.experimentType===4) renderResultsExp4(run,timeStr);
+  else if(run.experimentType===5) renderResultsExp5(run,timeStr);
 }
 
 function buildSummaryCards(run,metricFn,unitFn,labelFn,colorFn){
@@ -1754,6 +2065,130 @@ function renderResultsExp3(run,timeStr){
   });
 }
 
+/* ── Shared PIR time-series chart builder ──────────────────
+   phases: EXP4_PHASES or EXP5_PHASES data (with .startT/.endT/.samples)
+   draws colored background bands per phase + smoothed PIR line            */
+function buildPirChart(phases){
+  // Inline Chart.js plugin for phase background bands
+  const phaseBgPlugin={
+    id:'phaseBg',
+    beforeDraw(chart){
+      const{ctx,chartArea,scales:{x}}=chart;
+      if(!chartArea) return;
+      ctx.save();
+      phases.forEach(ph=>{
+        if(ph.startT===ph.endT||!ph.samples.length) return;
+        const x1=x.getPixelForValue(ph.startT);
+        const x2=x.getPixelForValue(ph.endT);
+        ctx.fillStyle=ph.color;
+        ctx.fillRect(x1,chartArea.top,Math.max(1,x2-x1),chartArea.height);
+      });
+      ctx.restore();
+    }
+  };
+  const allSamples=phases.flatMap(ph=>ph.samples);
+  const dataset=allSamples.map(s=>({x:s.t,y:s.pir}));
+  const canvas=document.getElementById('comparison-chart');
+  if(compChartInst){compChartInst.destroy();compChartInst=null;}
+  compChartInst=new Chart(canvas,{
+    type:'line',
+    data:{datasets:[{label:'PIR (smoothed)',data:dataset,
+      borderColor:'#58a6ff',backgroundColor:'rgba(88,166,255,0.08)',
+      borderWidth:2,pointRadius:0,tension:0.3,fill:true}]},
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{labels:{color:'#e6edf3'}}},
+      scales:{
+        x:{type:'linear',title:{display:true,text:'Time (s)',color:'#8b949e'},
+           ticks:{color:'#8b949e'},grid:{color:'rgba(48,54,61,0.5)'}},
+        y:{min:0,max:0.85,title:{display:true,text:'PIR (pupil / iris)',color:'#8b949e'},
+           ticks:{color:'#8b949e'},grid:{color:'rgba(48,54,61,0.5)'}}
+      }
+    },
+    plugins:[phaseBgPlugin]
+  });
+}
+
+function buildPhaseSummaryCards(phases){
+  const cards=document.getElementById('method-summary-cards');cards.innerHTML='';
+  phases.forEach(ph=>{
+    const el=document.createElement('div');
+    el.className='method-card';
+    const c=ph.name==='hard'?'#f85149':ph.name==='easy'?'#3fb950':ph.name==='bright'?'#f0c000':ph.name==='dark'?'#8b949e':'#58a6ff';
+    el.innerHTML=`<div class="mc-label" style="color:${c}">${ph.label}</div>
+      <div class="mc-value">${ph.mean?ph.mean.toFixed(3):'–'}</div>
+      <div class="mc-unit">mean PIR</div>`;
+    cards.appendChild(el);
+  });
+}
+
+function renderResultsExp4(run,timeStr){
+  _lineReplayStops.forEach(fn=>fn());_lineReplayStops=[];
+  document.getElementById('sec-table').style.display='none';
+  document.getElementById('res-title').textContent='Exp 4 — Cognitive Load';
+  document.getElementById('res-subtitle').textContent=timeStr+'   |   Pupil-to-Iris Ratio  (PIR)';
+  buildPhaseSummaryCards(run.phases);
+  document.getElementById('sec-chart-title').textContent='PIR over Time — Cognitive Load Phases';
+  buildPirChart(run.phases);
+  // Phase table
+  document.getElementById('sec-heatmaps').style.display='block';
+  document.getElementById('sec-heatmaps-title').textContent='Phase Summary';
+  const hc=document.getElementById('heatmaps-container');hc.innerHTML='';
+  const easy=run.phases.find(p=>p.name==='easy');
+  const hard=run.phases.find(p=>p.name==='hard');
+  const base=run.phases.find(p=>p.name==='baseline');
+  const rows=[
+    {phase:'Baseline',       mean:base?.mean, expected:'–',       color:'#58a6ff'},
+    {phase:'Easy Task',      mean:easy?.mean, expected:'↓ or baseline', color:'#3fb950'},
+    {phase:'Hard Task',      mean:hard?.mean, expected:'↑ dilation',    color:'#f85149'},
+  ];
+  const detected=hard&&easy?hard.mean>easy.mean?'Detected — hard task PIR > easy task PIR':'Not detected — no significant difference':'–';
+  let tbl=`<table class="tbl" style="max-width:600px"><thead><tr>
+    <th>Phase</th><th>Mean PIR</th><th>Expected</th><th>Δ vs Baseline</th></tr></thead><tbody>`;
+  rows.forEach(r=>{
+    const delta=base&&r.mean?+(r.mean-base.mean).toFixed(4):0;
+    const dStr=r.phase==='Baseline'?'–':(delta>0?'+':'')+delta;
+    tbl+=`<tr><td style="color:${r.color}">${r.phase}</td><td style="font-weight:600">${r.mean?r.mean.toFixed(3):'–'}</td><td style="color:#8b949e">${r.expected}</td><td style="color:${delta>0?'#3fb950':delta<0?'#f85149':'#8b949e'}">${dStr}</td></tr>`;
+  });
+  tbl+=`</tbody></table>
+    <p style="margin-top:14px;font-size:.82rem;color:${hard&&easy&&hard.mean>easy.mean?'#3fb950':'#f85149'}">${detected}</p>
+    <p style="margin-top:8px;font-size:.75rem;color:#8b949e">Note: PIR is sensitive to ambient lighting and camera auto-exposure. Use relative changes, not absolute values.</p>`;
+  hc.innerHTML=tbl;
+}
+
+function renderResultsExp5(run,timeStr){
+  _lineReplayStops.forEach(fn=>fn());_lineReplayStops=[];
+  document.getElementById('sec-table').style.display='none';
+  document.getElementById('res-title').textContent='Exp 5 — Luminance Response';
+  document.getElementById('res-subtitle').textContent=timeStr+'   |   Pupillary Light Reflex  (PIR)';
+  buildPhaseSummaryCards(run.phases);
+  document.getElementById('sec-chart-title').textContent='PIR over Time — Luminance Phases';
+  buildPirChart(run.phases);
+  // PLR table
+  document.getElementById('sec-heatmaps').style.display='block';
+  document.getElementById('sec-heatmaps-title').textContent='Luminance Response Summary';
+  const hc=document.getElementById('heatmaps-container');hc.innerHTML='';
+  const base=run.phases.find(p=>p.name==='baseline');
+  const bright=run.phases.find(p=>p.name==='bright');
+  const dark=run.phases.find(p=>p.name==='dark');
+  const rows=[
+    {phase:'Baseline (grey)', mean:base?.mean,   expected:'Reference'},
+    {phase:'Bright (white)',  mean:bright?.mean, expected:'↓ constriction', ok:bright&&base?bright.mean<base.mean:null},
+    {phase:'Dark (black)',    mean:dark?.mean,   expected:'↑ dilation',     ok:dark&&base?dark.mean>base.mean:null},
+  ];
+  let tbl=`<table class="tbl" style="max-width:640px"><thead><tr>
+    <th>Phase</th><th>Mean PIR</th><th>Expected</th><th>Δ vs Baseline</th><th>Detected?</th></tr></thead><tbody>`;
+  rows.forEach(r=>{
+    const delta=base&&r.mean?+(r.mean-base.mean).toFixed(4):0;
+    const dStr=r.phase.includes('Baseline')?'–':(delta>0?'+':'')+delta;
+    const det=r.ok===null?'–':r.ok?'<span style="color:#3fb950">Yes</span>':'<span style="color:#f85149">No</span>';
+    tbl+=`<tr><td>${r.phase}</td><td style="font-weight:600">${r.mean?r.mean.toFixed(3):'–'}</td><td style="color:#8b949e">${r.expected}</td><td style="color:${delta>0?'#3fb950':delta<0?'#f0c000':'#8b949e'}">${dStr}</td><td>${det}</td></tr>`;
+  });
+  tbl+=`</tbody></table>
+    <p style="margin-top:10px;font-size:.75rem;color:#8b949e">Note: webcam auto-exposure adapts to screen brightness and may confound absolute PIR. Relative changes (Δ) are more meaningful than absolute PIR values.</p>`;
+  hc.innerHTML=tbl;
+}
+
 function buildHeatmapGrid(nRows,rowLabelFn,cellFn){
   const hc=document.getElementById('heatmaps-container');hc.innerHTML='';
   const hdr=document.createElement('div');hdr.className='hm-header-row cols3';
@@ -1789,11 +2224,22 @@ function updateRunsList(){
   allRuns.forEach((run,i)=>{
     const el=document.createElement('div');el.className='run-item';
     const d=new Date(run.timestamp);
-    const scores=METHODS.map(m=>{
-      const mr=run.results[m];if(!mr) return '';
-      const val=run.experimentType===3?mr.leakageRate+'%':mr.overallMean+'px';
-      return`<span class="ri-score" style="color:${METHOD_COLORS[m]}">${val}</span>`;
-    }).join('<span style="color:#30363d;margin:0 2px">|</span>');
+    let scores='';
+    if(run.experimentType===4||run.experimentType===5){
+      // Show mean PIR per phase
+      if(run.phases&&run.phases.length){
+        scores=run.phases.map(ph=>{
+          const val=ph.mean!=null?ph.mean.toFixed(3):'–';
+          return`<span class="ri-score" style="color:#8b949e">${ph.label}: ${val}</span>`;
+        }).join('<span style="color:#30363d;margin:0 2px">|</span>');
+      }
+    } else {
+      scores=METHODS.map(m=>{
+        const mr=run.results[m];if(!mr) return '';
+        const val=run.experimentType===3?mr.leakageRate+'%':mr.overallMean+'px';
+        return`<span class="ri-score" style="color:${METHOD_COLORS[m]}">${val}</span>`;
+      }).join('<span style="color:#30363d;margin:0 2px">|</span>');
+    }
     el.innerHTML=`<span class="ri-exp">[Exp${run.experimentType}]</span>
       <div class="ri-scores">${scores}</div>
       <span class="ri-time">${d.toLocaleTimeString()}</span>`;
@@ -1828,6 +2274,11 @@ function saveResults(){
   const ts=new Date().toISOString().replace(/[:.]/g,'-').slice(0,19);
   const payload={exportedAt:new Date().toISOString(),screenWidth:window.innerWidth,screenHeight:window.innerHeight,
     runs:allRuns.map(run=>{
+      if(run.experimentType===4||run.experimentType===5){
+        return{experimentType:run.experimentType,timestamp:run.timestamp,
+          phases:run.phases.map(ph=>({name:ph.name,label:ph.label,duration_s:ph.dur/1000,
+            meanPIR:ph.mean,sampleCount:ph.samples.length,timeSeries:ph.samples}))};
+      }
       const base={experimentType:run.experimentType,timestamp:run.timestamp,results:{}};
       if(run.wgClicksPerDot) base.wgClicksPerDot=run.wgClicksPerDot;
       METHODS.forEach(m=>{
@@ -1853,7 +2304,12 @@ function saveResults(){
   const latestRun=allRuns[latestRunIdx];
   if(latestRun){
     let csv='';
-    if(latestRun.experimentType===3){
+    if(latestRun.experimentType===4||latestRun.experimentType===5){
+      csv='Phase,Duration_s,MeanPIR,Samples\n';
+      latestRun.phases.forEach(ph=>{
+        csv+=`"${ph.label}",${ph.dur/1000},${ph.mean},${ph.samples.length}\n`;
+      });
+    } else if(latestRun.experimentType===3){
       csv='Method,Direction,OnScreen,Total,LeakagePct\n';
       METHODS.forEach(m=>{const mr=latestRun.results[m];if(!mr) return;
         mr.dirResults.forEach(dr=>{const pct=dr.total?+(dr.onScreen/dr.total*100).toFixed(1):0;
@@ -1871,7 +2327,7 @@ function saveResults(){
     const csvUrl=URL.createObjectURL(csvBlob);
     const b=document.createElement('a');b.href=csvUrl;b.download=`gaze_experiment_${ts}.csv`;b.click();URL.revokeObjectURL(csvUrl);
 
-    if(latestRun.experimentType!==2){
+    if(latestRun.experimentType!==2&&latestRun.experimentType!==4&&latestRun.experimentType!==5){
       let hi=0;
       METHODS.forEach(m=>{const mr=latestRun.results[m];if(!mr) return;
         const items=latestRun.experimentType===3?mr.dirResults:mr.dotResults;
