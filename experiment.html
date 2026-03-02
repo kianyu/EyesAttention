@@ -4,7 +4,6 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Gaze Estimation Experiment</title>
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.15.0/dist/tf.min.js"></script>
   <script src="https://webgazer.cs.brown.edu/webgazer.js"></script>
   <script src="/mediapipe/face_mesh/face_mesh.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
@@ -206,16 +205,16 @@
 
   <div class="method-info-box">
     <div class="mib mib-wg">
-      <h3>WebGazer <span class="tag tag-wg">Method 1</span></h3>
-      <p>Ridge Regression on eye-patch appearance features via WebGazer.js. Gaze dot shown in <b style="color:#58a6ff">blue</b>.</p>
+      <h3>WG Ridge <span class="tag tag-wg">Method 1</span></h3>
+      <p>Standard Ridge Regression on eye-patch appearance features (WebGazer.js ZW[0]). Gaze dot shown in <b style="color:#58a6ff">blue</b>.</p>
     </div>
     <div class="mib mib-ml">
-      <h3>Ridge Gaze <span class="tag tag-ml">Method 2</span></h3>
-      <p>Ridge regression on iris position + head-pose proxy features (nose position relative to face). Head-movement-corrected. Gaze dot shown in <b style="color:#3fb950">green</b>.</p>
+      <h3>WG Weighted <span class="tag tag-ml">Method 2</span></h3>
+      <p>Weighted Ridge Regression — recent calibration samples weighted more heavily (WebGazer.js ZW[1]). Gaze dot shown in <b style="color:#3fb950">green</b>.</p>
     </div>
     <div class="mib mib-poly">
-      <h3>MLP Gaze <span class="tag tag-poly">Method 3</span></h3>
-      <p>Neural network (8→32→16→2) trained via TensorFlow.js during calibration. Learns non-linear iris + head-pose mapping. Gaze dot shown in <b style="color:#f0c000">yellow</b>.</p>
+      <h3>WG Threaded <span class="tag tag-poly">Method 3</span></h3>
+      <p>Ridge Regression computed in a Web Worker for non-blocking inference (WebGazer.js ZW[2]). Gaze dot shown in <b style="color:#f0c000">yellow</b>.</p>
     </div>
   </div>
 
@@ -320,9 +319,9 @@
     <div id="exp-progress">Dot 1 / 9</div>
     <div id="exp-collect-badge">Waiting 1s…</div>
     <div class="dot-legend">
-      <div class="dot-legend-item"><div class="dot-legend-circle" style="background:#58a6ff"></div>WebGazer</div>
-      <div class="dot-legend-item"><div class="dot-legend-circle" style="background:#3fb950"></div>Ridge Gaze</div>
-      <div class="dot-legend-item"><div class="dot-legend-circle" style="background:#f0c000"></div>MLP Gaze</div>
+      <div class="dot-legend-item"><div class="dot-legend-circle" style="background:#58a6ff"></div>WG Ridge</div>
+      <div class="dot-legend-item"><div class="dot-legend-circle" style="background:#3fb950"></div>WG Weighted</div>
+      <div class="dot-legend-item"><div class="dot-legend-circle" style="background:#f0c000"></div>WG Threaded</div>
     </div>
     <div style="margin-top:8px">
       <button id="btn-toggle-gaze" onclick="toggleGazeDot()"
@@ -343,9 +342,9 @@
     <div id="exp2-progress">Word 1 / –</div>
     <div id="exp2-collect-badge">Waiting…</div>
     <div class="dot-legend" style="margin-top:8px">
-      <div class="dot-legend-item"><div class="dot-legend-circle" style="background:#58a6ff"></div>WG</div>
-      <div class="dot-legend-item"><div class="dot-legend-circle" style="background:#3fb950"></div>Ridge</div>
-      <div class="dot-legend-item"><div class="dot-legend-circle" style="background:#f0c000"></div>MLP</div>
+      <div class="dot-legend-item"><div class="dot-legend-circle" style="background:#58a6ff"></div>Ridge</div>
+      <div class="dot-legend-item"><div class="dot-legend-circle" style="background:#3fb950"></div>Weighted</div>
+      <div class="dot-legend-item"><div class="dot-legend-circle" style="background:#f0c000"></div>Threaded</div>
     </div>
     <div style="margin-top:8px">
       <button id="btn-toggle-gaze2" onclick="toggleGazeDot()"
@@ -453,7 +452,7 @@ const CAL_POSITIONS_PCT = [
   [10,90],[50,90],[90,90]
 ];
 const METHODS = ['webgazer','iris-linear','iris-poly'];
-const METHOD_LABELS = {'webgazer':'WebGazer','iris-linear':'Ridge Gaze','iris-poly':'MLP Gaze'};
+const METHOD_LABELS = {'webgazer':'WG Ridge','iris-linear':'WG Weighted','iris-poly':'WG Threaded'};
 const METHOD_COLORS = {'webgazer':'#58a6ff','iris-linear':'#3fb950','iris-poly':'#f0c000'};
 const METHOD_CSS    = {'webgazer':'ms-card-wg','iris-linear':'ms-card-ml','iris-poly':'ms-card-poly'};
 
@@ -524,23 +523,19 @@ let faceLoopId   = null;
 let currentLM    = null;
 let selectDrawId = null;
 
-// Calibration — three-phase: WebGazer → Ridge Gaze → MLP Gaze (all click-based)
-let calPhase      = 'webgazer'; // 'webgazer' | 'iris-linear' | 'iris-poly'
+// Calibration — single WebGazer phase (all 3 backends train simultaneously)
 let calIndex      = 0;
-let irisLinearCalData = [];  // [{lx,ly,rx,ry,sx,sy}] one entry per click (phase 2)
-let irisPolyCalData   = [];  // [{lx,ly,rx,ry,sx,sy}] one entry per click (phase 3)
-let calModel_iris_linear = null;  // Ridge Gaze model (theta_x / theta_y)
-let calModel_iris_poly   = null;  // MLP Gaze TF.js model (tf.Sequential)
-let mlpTraining = false;
 let wgClickCount  = 0;
 let calDotEls     = [];
 let calTotalRounds = 1;
 let calRound       = 0;
 let calDotTotal    = [];
 
-// WebGazer
-let wgRunning = false;
-let wgGaze    = null;
+// WebGazer — 3 backends: ZW[0]=ridge, ZW[1]=weightedRidge, ZW[2]=threadedRidge
+let wgRunning       = false;
+let wgGaze          = null;  // ZW[0] ridge
+let wgGazeWeighted  = null;  // ZW[1] weightedRidge
+let wgGazeThreaded  = null;  // ZW[2] threadedRidge
 
 // Gaze dot visibility (H key toggles all 3)
 let gazeVisible = false;
@@ -596,198 +591,14 @@ let exp5PirSmoothed = null;
 let compChartInst  = null;
 let chartInstances = [];
 
-/* ═══════════════════════════════════════════════════════════
-   MATRIX MATH
-═══════════════════════════════════════════════════════════ */
-function matTranspose(A){return A[0].map((_,j)=>A.map(r=>r[j]));}
-function matMul(A,B){
-  const m=A.length,n=B[0].length,k=B.length;
-  const C=Array.from({length:m},()=>new Array(n).fill(0));
-  for(let i=0;i<m;i++) for(let j=0;j<n;j++) for(let l=0;l<k;l++) C[i][j]+=A[i][l]*B[l][j];
-  return C;
-}
-function solveGaussian(A,b){
-  const n=A.length,M=A.map((row,i)=>[...row,b[i]]);
-  for(let col=0;col<n;col++){
-    let mx=col;
-    for(let r=col+1;r<n;r++) if(Math.abs(M[r][col])>Math.abs(M[mx][col])) mx=r;
-    [M[col],M[mx]]=[M[mx],M[col]];
-    if(Math.abs(M[col][col])<1e-12) continue;
-    for(let r=0;r<n;r++){
-      if(r===col) continue;
-      const f=M[r][col]/M[col][col];
-      for(let k2=col;k2<=n;k2++) M[r][k2]-=f*M[col][k2];
-    }
-  }
-  return M.map((row,i)=>row[n]/row[i]);
-}
-function fitModel(featureMatrix,targets,lambda=1.0){
-  const X=featureMatrix,XT=matTranspose(X),XTX=matMul(XT,X);
-  // Ridge regularization: add λ to diagonal (skip bias at index 0)
-  const ridge=XTX.map((r,i)=>r.map((v,j)=>i===j&&i>0?v+lambda:v));
-  const XTy_x=matMul(XT,targets.map(t=>[t[0]])).map(r=>r[0]);
-  const XTy_y=matMul(XT,targets.map(t=>[t[1]])).map(r=>r[0]);
-  return{theta_x:solveGaussian(ridge.map(r=>[...r]),[...XTy_x]),
-         theta_y:solveGaussian(ridge.map(r=>[...r]),[...XTy_y])};
-}
-function modelPredict(model,fv){
-  return{x:fv.reduce((s,v,i)=>s+v*model.theta_x[i],0),
-         y:fv.reduce((s,v,i)=>s+v*model.theta_y[i],0)};
-}
 
-/* ═══════════════════════════════════════════════════════════
-   IRIS + HEAD-POSE FEATURE EXTRACTION
-   Returns: {lx,ly,rx,ry, ax,ay (avg iris), nx,ny (head-pose proxy)}
-   ax,ay  = average normalised iris position across both eyes
-   nx,ny  = nose-tip position relative to face bounding box centre
-             (head yaw proxy for x, head pitch proxy for y)
-═══════════════════════════════════════════════════════════ */
-function extractIrisFeatures(){
-  if(!currentLM||currentLM.length<478) return null;
-  const lm=currentLM;
-  const W=videoEl?(videoEl.videoWidth||640):640;
-  const H=videoEl?(videoEl.videoHeight||480):480;
-  const px=pt=>({x:pt.x*W,y:pt.y*H});
-
-  // Face bounding box (cheeks + forehead/chin)
-  const leftCheek=px(lm[234]), rightCheek=px(lm[454]);
-  const forehead=px(lm[10]),  chin=px(lm[152]);
-  const faceW=Math.abs(rightCheek.x-leftCheek.x)||1;
-  const faceH=Math.abs(chin.y-forehead.y)||1;
-  const faceCX=(leftCheek.x+rightCheek.x)/2;
-  const faceCY=(forehead.y+chin.y)/2;
-
-  // Iris centres
-  const lc=px(lm[468]);
-  const rc=px(lm[473]);
-
-  // Per-eye within-eye position (auxiliary features for MLP)
-  const lo=px(lm[33]),li=px(lm[133]),lu=px(lm[160]),ll=px(lm[144]);
-  const lew=Math.abs(lo.x-li.x)||1,leh=Math.abs(lu.y-ll.y)||1;
-  const lx=(lc.x-Math.min(lo.x,li.x))/lew,ly=(lc.y-Math.min(lu.y,ll.y))/leh;
-
-  const ro=px(lm[362]),ri=px(lm[263]),ru=px(lm[385]),rl=px(lm[373]);
-  const rew=Math.abs(ro.x-ri.x)||1,reh=Math.abs(ru.y-rl.y)||1;
-  const rx=(rc.x-Math.min(ro.x,ri.x))/rew,ry=(rc.y-Math.min(ru.y,rl.y))/reh;
-
-  // Average iris position normalised to face bounding box (primary gaze signal)
-  // Range ~±0.25 for typical screen gaze — 3× more variance than within-eye (~±0.05)
-  const avgIrisX=(lc.x+rc.x)/2, avgIrisY=(lc.y+rc.y)/2;
-  const ax=(avgIrisX-faceCX)/faceW;
-  const ay=(avgIrisY-faceCY)/faceH;
-
-  // Head-pose proxy: nose tip (lm[1]) relative to face bounding box centre
-  const noseTip=px(lm[1]);
-  const nx=(noseTip.x-faceCX)/faceW;  // -0.5…0.5, positive = face turned right
-  const ny=(noseTip.y-faceCY)/faceH;  // pitch proxy
-
-  return{lx,ly,rx,ry,ax,ay,nx,ny};
-}
-
-/* ═══════════════════════════════════════════════════════════
-   GAZE ESTIMATION (per method)
-═══════════════════════════════════════════════════════════ */
-// Build the 5-feature Ridge vector: [1, ax, ay, nx, ny]
-// ax/ay are face-box-normalised iris position (~±0.25 range)
-// Cross terms removed — they are near-zero when head is still during calibration
-function makeRidgeFeatureVector(feat){
-  const {ax,ay,nx,ny}=feat;
-  return[1,ax,ay,nx,ny];
-}
-// Build the 8-feature MLP vector (no bias term, TF handles it):
-// [ax, ay, nx, ny, lx, ly, rx, ry]
-// ax/ay are face-box-normalised iris position (same as Ridge); lx/ly/rx/ry are within-eye auxiliary
-function makeMlpFeatureVector(feat){
-  return[feat.ax,feat.ay,feat.nx,feat.ny,feat.lx,feat.ly,feat.rx,feat.ry];
-}
-
-let _ridgeNullLogged=false, _mlpNullLogged=false, _featNullLogged=false;
 function getCurrentGaze(method){
-  if(method==='webgazer') return wgGaze?{...wgGaze}:null;
-  const feat=extractIrisFeatures();
-  if(!feat){
-    if(!_featNullLogged){console.warn('[getCurrentGaze] extractIrisFeatures() returned NULL (logged once)');_featNullLogged=true;}
-    return null;
-  }
-
-  if(method==='iris-linear'){
-    // Ridge Gaze — synchronous
-    if(!calModel_iris_linear){
-      if(!_ridgeNullLogged){console.warn('[getCurrentGaze] calModel_iris_linear is NULL — Ridge Gaze has no model');_ridgeNullLogged=true;}
-      return null;
-    }
-    const pred=modelPredict(calModel_iris_linear, makeRidgeFeatureVector(feat));
-    return pred;
-  } else {
-    // MLP Gaze — synchronous inference via tf.tidy
-    if(!calModel_iris_poly){
-      if(!_mlpNullLogged){console.warn('[getCurrentGaze] calModel_iris_poly is NULL — MLP Gaze has no model');_mlpNullLogged=true;}
-      return null;
-    }
-    if(mlpTraining) return null;
-    try{
-      const fv=makeMlpFeatureVector(feat);
-      const result=tf.tidy(()=>{
-        const input=tf.tensor2d([fv]);
-        return calModel_iris_poly.predict(input).arraySync()[0];
-      });
-      const W=calModel_iris_poly._scaleW||window.innerWidth;
-      const H=calModel_iris_poly._scaleH||window.innerHeight;
-      return{x:result[0]*W, y:result[1]*H};
-    }catch(e){
-      console.error('[getCurrentGaze] MLP inference error:',e);
-      return null;
-    }
-  }
+  if(method==='webgazer')    return wgGaze         ?{...wgGaze}        :null;
+  if(method==='iris-linear') return wgGazeWeighted ?{...wgGazeWeighted}:null;
+  if(method==='iris-poly')   return wgGazeThreaded ?{...wgGazeThreaded}:null;
+  return null;
 }
 
-/* ═══════════════════════════════════════════════════════════
-   MLP GAZE — TF.JS NEURAL NETWORK TRAINING
-   Architecture: 8 inputs → Dense(32,relu) → Dense(16,relu) → Dense(2,linear)
-   Trained on all individual click samples from calibration (~9 dots × N clicks)
-═══════════════════════════════════════════════════════════ */
-async function trainMlpModel(calData){
-  const n=calData.length;
-  const xs=calData.map(d=>makeMlpFeatureVector(d));
-  const W=window.innerWidth, H=window.innerHeight;
-  // Normalise targets to [0,1] — model outputs normalised coords, we scale back on inference
-  const ys=calData.map(d=>[d.sx/W, d.sy/H]);
-
-  const xTensor=tf.tensor2d(xs);   // [n,8]
-  const yTensor=tf.tensor2d(ys);   // [n,2]
-
-  const model=tf.sequential({layers:[
-    tf.layers.dense({inputShape:[8],units:32,activation:'relu',
-      kernelInitializer:'glorotUniform',
-      kernelRegularizer:tf.regularizers.l2({l2:1e-4})}),
-    tf.layers.dense({units:16,activation:'relu',
-      kernelRegularizer:tf.regularizers.l2({l2:1e-4})}),
-    tf.layers.dense({units:2,activation:'linear'})
-  ]});
-
-  model.compile({optimizer:tf.train.adam(0.01),loss:'meanSquaredError'});
-
-  const epochs=300;
-  const barFill=document.getElementById('cal-bar-fill');
-  await model.fit(xTensor,yTensor,{
-    epochs,
-    batchSize:Math.min(32,n),
-    shuffle:true,
-    callbacks:{
-      onEpochEnd:(epoch,logs)=>{
-        barFill.style.width=((epoch+1)/epochs*100)+'%';
-        if((epoch+1)%50===0) console.log('[MLP] epoch',(epoch+1),'loss=',logs.loss.toFixed(5));
-      }
-    }
-  });
-
-  xTensor.dispose(); yTensor.dispose();
-
-  // Wrap model so modelPredict-style calls work (scale coords back to px)
-  // We store the raw tf.Sequential as calModel_iris_poly and handle scaling in getCurrentGaze
-  model._scaleW=W; model._scaleH=H;
-  return model;
-}
 
 /* ═══════════════════════════════════════════════════════════
    CAMERA & MEDIAPIPE
@@ -890,9 +701,8 @@ async function beginCalibration(){
   WG_CLICKS_NEEDED=Math.min(20,Math.max(1,parseInt(clicksInput.value)||5));
   showPhase('ph-calibrate');
 
-  calPhase='webgazer';
-  calIndex=0;irisLinearCalData=[];irisPolyCalData=[];calModel_iris_linear=null;calModel_iris_poly=null;
-  wgGaze=null;wgClickCount=0;
+  calIndex=0;
+  wgGaze=null;wgGazeWeighted=null;wgGazeThreaded=null;wgClickCount=0;
   calTotalRounds=Math.ceil(WG_CLICKS_NEEDED/WG_CLICKS_PER_ROUND);
   calRound=0;calDotTotal=new Array(9).fill(0);
   chartInstances.forEach(c=>c.destroy());chartInstances=[];
@@ -902,27 +712,37 @@ async function beginCalibration(){
   calDotEls.forEach(d=>d.remove());calDotEls=[];
 
   const nClicks=wgClicksForRound(0);
-  document.getElementById('cal-step').textContent='STEP 1 OF 3 — WEBGAZER';
+  document.getElementById('cal-step').textContent='WEBGAZER CALIBRATION';
   document.getElementById('cal-step').style.color='#58a6ff';
   document.getElementById('cal-title').textContent='WebGazer Calibration';
   document.getElementById('cal-desc').innerHTML=
     'Look at each <span style="color:#f0c000">yellow dot</span> and '+
     '<b>click it '+nClicks+' times</b>.<br>'+
     calTotalRounds+' round'+(calTotalRounds>1?'s':'')+' × '+WG_CLICKS_PER_ROUND+
-    ' clicks = <b>'+WG_CLICKS_NEEDED+' total</b> per dot';
+    ' clicks = <b>'+WG_CLICKS_NEEDED+' total</b> per dot<br>'+
+    '<span style="color:#8b949e;font-size:.8rem">All 3 backends (Ridge / Weighted / Threaded) train simultaneously</span>';
   document.getElementById('cal-bar-wrap').style.display='none';
   document.getElementById('cal-msg').textContent='';
 
   // Start WebGazer
   try{
     if(wgRunning){webgazer.end();wgRunning=false;}
-    await webgazer.setGazeListener(data=>{if(data) wgGaze={x:data.x,y:data.y};}).begin();
+    await webgazer.setGazeListener(data=>{
+      if(!data) return;
+      wgGaze={x:data.x,y:data.y};
+      if(data.all){
+        if(data.all[1]) wgGazeWeighted={x:data.all[1].x,y:data.all[1].y};
+        if(data.all[2]) wgGazeThreaded={x:data.all[2].x,y:data.all[2].y};
+      }
+    }).begin();
+    webgazer.addRegression('weightedRidge');
+    webgazer.addRegression('threadedRidge');
     webgazer.showPredictionPoints(false);webgazer.showVideo(false);
     webgazer.showFaceOverlay(false);webgazer.showFaceFeedbackBox(false);
     wgRunning=true;
   }catch(e){document.getElementById('cal-msg').textContent='WebGazer error: '+e.message;return;}
 
-  // Start camera + MediaPipe (needed for iris phase 2)
+  // Start camera + MediaPipe (needed for Exp 4/5 pupil estimation)
   try{
     if(!camStream) await initCamera();
     if(!faceMesh) await initFaceMesh();
@@ -950,7 +770,7 @@ function onCalDotClick(idx){
   const {x,y}=pctToPx(CAL_POSITIONS_PCT[idx]);
   const roundMax=wgClicksForRound(calRound);
 
-  // Feed WebGazer only (iris calibration happens separately in phase 2)
+  // Feed WebGazer — all 3 backends (ZW[0,1,2]) receive data simultaneously
   webgazer.recordScreenPosition(x,y,'click');
 
   wgClickCount++;calDotTotal[idx]++;
@@ -981,141 +801,18 @@ function onCalDotClick(idx){
 }
 
 function finishWebGazerCalibration(){
-  document.getElementById('cal-prog').textContent='✓ WebGazer calibrated! Preparing Ridge Gaze calibration…';
-  setTimeout(startIrisLinearCalibration,1500);
-}
-
-/* ── Shared helper: build a fresh dot grid for an iris calibration phase ── */
-function _startIrisPhase(stepLabel,stepColor,titleText,descText){
-  calIndex=0;wgClickCount=0;
-  calTotalRounds=Math.ceil(WG_CLICKS_NEEDED/WG_CLICKS_PER_ROUND);
-  calRound=0;calDotTotal=new Array(9).fill(0);
-
-  calDotEls.forEach(d=>d.remove());calDotEls=[];
-  const overlay=document.getElementById('cal-overlay');
-  buildCalDots(overlay,onIrisCalDotClick);
-
-  const nClicks=wgClicksForRound(0);
-  document.getElementById('cal-step').textContent=stepLabel;
-  document.getElementById('cal-step').style.color=stepColor;
-  document.getElementById('cal-title').textContent=titleText;
-  document.getElementById('cal-desc').innerHTML=descText.replace('__N__',nClicks);
-  document.getElementById('cal-bar-wrap').style.display='none';
-  document.getElementById('cal-msg').textContent='';
-  activateCalDot(0);
-  updateCalProgText();
-}
-
-function startIrisLinearCalibration(){
-  calPhase='iris-linear';
-  irisLinearCalData=[];
-  _startIrisPhase(
-    'STEP 2 OF 3 — RIDGE GAZE','#3fb950','Ridge Gaze Calibration',
-    'Look at each <span style="color:#f0c000">yellow dot</span> and '+
-    '<b>click it __N__ times</b>.<br>Ridge regression with head-pose correction.'
-  );
-}
-
-function startIrisPolyCalibration(){
-  calPhase='iris-poly';
-  irisPolyCalData=[];
-  _startIrisPhase(
-    'STEP 3 OF 3 — MLP GAZE','#f0c000','MLP Gaze Calibration',
-    'Look at each <span style="color:#f0c000">yellow dot</span> and '+
-    '<b>click it __N__ times</b>.<br>Neural network (TF.js) — more clicks = better accuracy.'
-  );
-}
-
-/* Shared click handler for both iris calibration phases */
-function onIrisCalDotClick(idx){
-  if(idx!==calIndex) return;
-  const dot=calDotEls[idx];
-  const {x,y}=pctToPx(CAL_POSITIONS_PCT[idx]);
-  const roundMax=wgClicksForRound(calRound);
-
-  // Capture iris + head-pose features on click
-  const feat=extractIrisFeatures();
-  if(feat){
-    const entry={lx:feat.lx,ly:feat.ly,rx:feat.rx,ry:feat.ry,
-                 ax:feat.ax,ay:feat.ay,nx:feat.nx,ny:feat.ny,sx:x,sy:y};
-    if(calPhase==='iris-linear') irisLinearCalData.push(entry);
-    else irisPolyCalData.push(entry);
-  }
-  console.log('[CAL]',calPhase,'dot',idx,'click. feat=',feat?'ok':'null',
-    'data len=',calPhase==='iris-linear'?irisLinearCalData.length:irisPolyCalData.length);
-
-  wgClickCount++;calDotTotal[idx]++;
-  dot.textContent=calDotTotal[idx]+'/'+WG_CLICKS_NEEDED;
-  dot.style.fontSize='.65rem';
-
-  if(wgClickCount>=roundMax){
-    wgClickCount=0;dot.classList.remove('active');
-    if(calIndex<8){
-      calIndex++;activateCalDot(calIndex);updateCalProgText();
-    } else {
-      calRound++;
-      if(calRound>=calTotalRounds){
-        calDotEls.forEach(d=>{d.classList.remove('active');d.classList.add('done');d.textContent='✓';d.style.fontSize='';});
-        if(calPhase==='iris-linear') finishIrisLinearCalibration();
-        else finishIrisPolyCalibration();
-      } else {
-        const nextClicks=wgClicksForRound(calRound);
-        calDotEls.forEach((d,i)=>{
-          d.classList.remove('active','done');
-          d.textContent=calDotTotal[i]+'/'+WG_CLICKS_NEEDED;d.style.fontSize='.65rem';
-        });
-        document.getElementById('cal-desc').innerHTML=
-          'Round '+(calRound+1)+' of '+calTotalRounds+' — click each dot <b>'+nextClicks+' more times</b>';
-        calIndex=0;activateCalDot(0);updateCalProgText();
-      }
-    }
-  }
-}
-
-function finishIrisLinearCalibration(){
-  console.log('[CAL] finishRidgeGaze. data=',irisLinearCalData.length);
-  if(irisLinearCalData.length>=5){
-    // Ridge regression with 5-feature face-box-normalised vector, lambda=0.1
-    calModel_iris_linear=fitModel(
-      irisLinearCalData.map(d=>makeRidgeFeatureVector(d)),
-      irisLinearCalData.map(d=>[d.sx,d.sy]),
-      0.1
-    );
-  }
-  console.log('[CAL] ridge model=',calModel_iris_linear?'fitted':'NULL (too few points)');
-  document.getElementById('cal-prog').textContent='✓ Ridge Gaze calibrated! Preparing MLP Gaze calibration…';
-  setTimeout(startIrisPolyCalibration,1500);
-}
-
-async function finishIrisPolyCalibration(){
-  console.log('[CAL] finishMlpGaze. data=',irisPolyCalData.length);
-  if(irisPolyCalData.length>=8){
-    document.getElementById('cal-prog').textContent='Training MLP neural network…';
-    document.getElementById('cal-bar-fill').style.width='0%';
-    document.getElementById('cal-bar-fill').style.background='#f0c000';
-    document.getElementById('cal-bar-wrap').style.display='block';
-    mlpTraining=true;
-    try{
-      calModel_iris_poly=await trainMlpModel(irisPolyCalData);
-      console.log('[CAL] MLP model trained');
-    }catch(e){
-      console.error('[CAL] MLP training error',e);
-    }
-    mlpTraining=false;
-  } else {
-    console.log('[CAL] MLP skipped — too few points');
-  }
   isCalibrated=true;
-  document.getElementById('cal-prog').textContent='✓ All 3 methods calibrated!';
+  document.getElementById('cal-prog').textContent='✓ All 3 WebGazer backends calibrated!';
   document.getElementById('cal-bar-fill').style.width='100%';
   document.getElementById('cal-bar-fill').style.background='#3fb950';
+  document.getElementById('cal-bar-wrap').style.display='block';
   setTimeout(()=>{
-    console.log('[CAL] done → showExpSelectPhase');
     document.getElementById('cal-overlay').classList.remove('show');
     document.getElementById('cal-bar-fill').style.background='#f0c000';
     showExpSelectPhase();
   },800);
 }
+
 
 function buildCalDots(overlay,clickHandler){
   CAL_POSITIONS_PCT.forEach(([lp,tp],i)=>{
@@ -1138,10 +835,7 @@ function showExpSelectPhase(){
 function selectExperiment(n){selectedExperiment=n;showReadyPhase();}
 function doRecalibrate(){
   isCalibrated=false;
-  calModel_iris_linear=null;
-  if(calModel_iris_poly){try{calModel_iris_poly.dispose();}catch(_){} calModel_iris_poly=null;}
-  wgGaze=null;mlpTraining=false;
-  calPhase='webgazer';irisLinearCalData=[];irisPolyCalData=[];
+  wgGaze=null;wgGazeWeighted=null;wgGazeThreaded=null;
   beginCalibration();
 }
 function runAnotherExperiment(){showExpSelectPhase();}
@@ -1164,7 +858,7 @@ function showReadyPhase(){
       <li><span style="color:#e6edf3">9 dots</span> appear one by one on screen</li>
       <li>Each dot shown for a configurable duration (default <span style="color:#e6edf3">5 s</span>)</li>
       <li>First <span style="color:#e6edf3">1 s</span> settling pause — move gaze to dot</li>
-      <li>All 3 methods collect gaze data simultaneously (~15 samples/s)</li>
+      <li>All 3 WebGazer backends (Ridge / Weighted / Threaded) collect data simultaneously (~15 samples/s)</li>
       <li>Press ${hKey} to show/hide the 3 colored gaze dots</li>
     </ul>
     <div style="margin-top:14px;display:flex;gap:20px;align-items:center">
@@ -1177,7 +871,7 @@ function showReadyPhase(){
       <li>A paragraph about <span style="color:#e6edf3">Transformers &amp; VAEs</span> is displayed</li>
       <li><span style="color:#e6edf3">Look at and read aloud</span> each highlighted word</li>
       <li>Total: <span style="color:#e6edf3">${EXP2_WORDS.length} words</span></li>
-      <li>All 3 methods collect gaze simultaneously per word</li>
+      <li>All 3 WebGazer backends collect gaze simultaneously per word</li>
       <li>Press ${hKey} to show/hide the 3 colored gaze dots</li>
     </ul>
     <div style="margin-top:14px;display:flex;gap:20px;align-items:center;flex-wrap:wrap">
@@ -1265,12 +959,8 @@ function startExperiment(){
   _dbgTick=0;
   if(!faceLoopId) startFaceLoop();  // ensure face loop is running during experiment
   console.log('[EXP] startExperiment() ─────────────────────');
-  console.log('  ridge calData=',irisLinearCalData.length,'model=',calModel_iris_linear?'ok':'NULL');
-  console.log('  mlp   calData=',irisPolyCalData.length,  'model=',calModel_iris_poly?'ok':'NULL','mlpTraining=',mlpTraining);
-  console.log('  faceLoopId=',faceLoopId,'currentLM=',currentLM?'ok('+currentLM.length+')':'NULL');
-  console.log('  wgRunning=',wgRunning,'wgGaze=',wgGaze);
-  // Log ridge model coefficients if available
-  if(calModel_iris_linear) console.log('  ridge theta_x=',calModel_iris_linear.theta_x,'theta_y=',calModel_iris_linear.theta_y);
+  console.log('  wgRunning=',wgRunning,'backends=',webgazer.getRegression?webgazer.getRegression().length:'?');
+  console.log('  wgGaze=',wgGaze,'wgGazeWeighted=',wgGazeWeighted,'wgGazeThreaded=',wgGazeThreaded);
   const durS=parseFloat(document.getElementById('exp1-duration-input')?.value)||5;
   DOT_DURATION_MS=Math.round(Math.max(1,durS)*1000);
   expDotIndex=0;
@@ -1335,16 +1025,12 @@ function collectGazeSample(){
   const doLog=(_dbgTick%15===1); // ~once per second at 15 fps
 
   if(doLog){
-    const lm=currentLM;
-    const feat=extractIrisFeatures();
     console.log(
       '[DBG collectGazeSample] tick='+_dbgTick,
       'dot='+(expDotIndex+1),
-      'currentLM='+(lm?'ok('+lm.length+')':'NULL'),
-      'feat='+(feat?'{ax='+feat.ax.toFixed(3)+',ay='+feat.ay.toFixed(3)+',nx='+feat.nx.toFixed(3)+',ny='+feat.ny.toFixed(3)+'}'  :'NULL'),
-      'ridge_model='+(calModel_iris_linear?'ok':'NULL'),
-      'mlp_model='+(calModel_iris_poly?'ok':'NULL'),
-      'mlpTraining='+mlpTraining
+      'wgGaze=',wgGaze?('x='+Math.round(wgGaze.x)+' y='+Math.round(wgGaze.y)):'NULL',
+      'wgWeighted=',wgGazeWeighted?('x='+Math.round(wgGazeWeighted.x)+' y='+Math.round(wgGazeWeighted.y)):'NULL',
+      'wgThreaded=',wgGazeThreaded?('x='+Math.round(wgGazeThreaded.x)+' y='+Math.round(wgGazeThreaded.y)):'NULL'
     );
   }
 
