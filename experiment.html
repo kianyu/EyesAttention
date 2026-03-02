@@ -8,6 +8,7 @@
   <script src="/mediapipe/face_mesh/face_mesh.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.15.0/dist/tf.min.js"></script>
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
     body{font-family:'Segoe UI',system-ui,sans-serif;background:#0d1117;color:#e6edf3;min-height:100vh}
@@ -30,6 +31,7 @@
     #gaze-dot-webgazer{background:rgba(88,166,255,0.55);border:2px solid #58a6ff;box-shadow:0 0 10px rgba(88,166,255,0.8)}
     #gaze-dot-iris-linear{background:rgba(63,185,80,0.55);border:2px solid #3fb950;box-shadow:0 0 10px rgba(63,185,80,0.8)}
     #gaze-dot-iris-poly{background:rgba(240,192,0,0.55);border:2px solid #f0c000;box-shadow:0 0 10px rgba(240,192,0,0.8)}
+    #mlp-status{position:fixed;bottom:12px;left:50%;transform:translateX(-50%);background:rgba(13,17,23,.88);border:1px solid #30363d;border-radius:8px;padding:6px 16px;font-size:.78rem;color:#8b949e;z-index:950;pointer-events:none;display:none}
 
     /* ── Buttons ─────────────────────────────────────────── */
     .btn{padding:10px 22px;border-radius:8px;border:none;cursor:pointer;font-size:.9rem;font-weight:600;transition:opacity .2s,background .2s}
@@ -173,6 +175,7 @@
 <div id="gaze-dot-iris-linear" class="gaze-dot-m"></div>
 <div id="gaze-dot-iris-poly"   class="gaze-dot-m"></div>
 <div id="toast"></div>
+<div id="mlp-status"></div>
 
 <!-- ══════════════════════════════════════════════════════
      PHASE 0 – Landing
@@ -187,12 +190,12 @@
       <p>Ridge Regression on eye-patch appearance features via WebGazer.js. Gaze dot shown in <b style="color:#58a6ff">blue</b>.</p>
     </div>
     <div class="mib mib-ml">
-      <h3>Iris Linear <span class="tag tag-ml">Method 2</span></h3>
-      <p>Linear regression on iris-to-eye-corner ratio features via MediaPipe. Gaze dot shown in <b style="color:#3fb950">green</b>.</p>
+      <h3>Ridge Gaze <span class="tag tag-ml">Method 2</span></h3>
+      <p>Ridge regression on iris position + head-pose proxy features (nose position relative to face). Head-movement-corrected. Gaze dot shown in <b style="color:#3fb950">green</b>.</p>
     </div>
     <div class="mib mib-poly">
-      <h3>Iris Polynomial <span class="tag tag-poly">Method 3</span></h3>
-      <p>Polynomial regression on iris position (6 features). Gaze dot shown in <b style="color:#f0c000">yellow</b>.</p>
+      <h3>MLP Gaze <span class="tag tag-poly">Method 3</span></h3>
+      <p>Neural network (8→32→16→2) trained via TensorFlow.js during calibration. Learns non-linear iris + head-pose mapping. Gaze dot shown in <b style="color:#f0c000">yellow</b>.</p>
     </div>
   </div>
 
@@ -295,8 +298,8 @@
     <div id="exp-collect-badge">Waiting 1s…</div>
     <div class="dot-legend">
       <div class="dot-legend-item"><div class="dot-legend-circle" style="background:#58a6ff"></div>WebGazer</div>
-      <div class="dot-legend-item"><div class="dot-legend-circle" style="background:#3fb950"></div>Iris Linear</div>
-      <div class="dot-legend-item"><div class="dot-legend-circle" style="background:#f0c000"></div>Iris Poly</div>
+      <div class="dot-legend-item"><div class="dot-legend-circle" style="background:#3fb950"></div>Ridge Gaze</div>
+      <div class="dot-legend-item"><div class="dot-legend-circle" style="background:#f0c000"></div>MLP Gaze</div>
     </div>
     <div style="margin-top:8px">
       <button id="btn-toggle-gaze" onclick="toggleGazeDot()"
@@ -318,8 +321,8 @@
     <div id="exp2-collect-badge">Waiting…</div>
     <div class="dot-legend" style="margin-top:8px">
       <div class="dot-legend-item"><div class="dot-legend-circle" style="background:#58a6ff"></div>WG</div>
-      <div class="dot-legend-item"><div class="dot-legend-circle" style="background:#3fb950"></div>IL</div>
-      <div class="dot-legend-item"><div class="dot-legend-circle" style="background:#f0c000"></div>IP</div>
+      <div class="dot-legend-item"><div class="dot-legend-circle" style="background:#3fb950"></div>Ridge</div>
+      <div class="dot-legend-item"><div class="dot-legend-circle" style="background:#f0c000"></div>MLP</div>
     </div>
     <div style="margin-top:8px">
       <button id="btn-toggle-gaze2" onclick="toggleGazeDot()"
@@ -400,7 +403,7 @@ const CAL_POSITIONS_PCT = [
   [10,90],[50,90],[90,90]
 ];
 const METHODS = ['webgazer','iris-linear','iris-poly'];
-const METHOD_LABELS = {'webgazer':'WebGazer','iris-linear':'Iris Linear','iris-poly':'Iris Poly'};
+const METHOD_LABELS = {'webgazer':'WebGazer','iris-linear':'Ridge Gaze','iris-poly':'MLP Gaze'};
 const METHOD_COLORS = {'webgazer':'#58a6ff','iris-linear':'#3fb950','iris-poly':'#f0c000'};
 const METHOD_CSS    = {'webgazer':'ms-card-wg','iris-linear':'ms-card-ml','iris-poly':'ms-card-poly'};
 
@@ -453,13 +456,14 @@ let faceLoopId   = null;
 let currentLM    = null;
 let selectDrawId = null;
 
-// Calibration — three-phase: WebGazer → Iris Linear → Iris Poly (all click-based)
+// Calibration — three-phase: WebGazer → Ridge Gaze → MLP Gaze (all click-based)
 let calPhase      = 'webgazer'; // 'webgazer' | 'iris-linear' | 'iris-poly'
 let calIndex      = 0;
 let irisLinearCalData = [];  // [{lx,ly,rx,ry,sx,sy}] one entry per click (phase 2)
 let irisPolyCalData   = [];  // [{lx,ly,rx,ry,sx,sy}] one entry per click (phase 3)
-let calModel_iris_linear = null;
-let calModel_iris_poly   = null;
+let calModel_iris_linear = null;  // Ridge Gaze model (theta_x / theta_y)
+let calModel_iris_poly   = null;  // MLP Gaze TF.js model (tf.Sequential)
+let mlpTraining = false;
 let wgClickCount  = 0;
 let calDotEls     = [];
 let calTotalRounds = 1;
@@ -544,7 +548,11 @@ function modelPredict(model,fv){
 }
 
 /* ═══════════════════════════════════════════════════════════
-   IRIS FEATURE EXTRACTION
+   IRIS + HEAD-POSE FEATURE EXTRACTION
+   Returns: {lx,ly,rx,ry, ax,ay (avg iris), nx,ny (head-pose proxy)}
+   ax,ay  = average normalised iris position across both eyes
+   nx,ny  = nose-tip position relative to face bounding box centre
+             (head yaw proxy for x, head pitch proxy for y)
 ═══════════════════════════════════════════════════════════ */
 function extractIrisFeatures(){
   if(!currentLM||currentLM.length<478) return null;
@@ -552,33 +560,120 @@ function extractIrisFeatures(){
   const W=videoEl?(videoEl.videoWidth||640):640;
   const H=videoEl?(videoEl.videoHeight||480):480;
   const px=pt=>({x:pt.x*W,y:pt.y*H});
+
+  // Left iris
   const lo=px(lm[33]),li=px(lm[133]),lu=px(lm[160]),ll=px(lm[144]),lc=px(lm[468]);
   const lew=Math.abs(lo.x-li.x)||1,leh=Math.abs(lu.y-ll.y)||1;
   const lx=(lc.x-Math.min(lo.x,li.x))/lew,ly=(lc.y-Math.min(lu.y,ll.y))/leh;
+
+  // Right iris
   const ro=px(lm[362]),ri=px(lm[263]),ru=px(lm[385]),rl=px(lm[373]),rc=px(lm[473]);
   const rew=Math.abs(ro.x-ri.x)||1,reh=Math.abs(ru.y-rl.y)||1;
   const rx=(rc.x-Math.min(ro.x,ri.x))/rew,ry=(rc.y-Math.min(ru.y,rl.y))/reh;
-  return{lx,ly,rx,ry};
+
+  // Average iris position
+  const ax=(lx+rx)/2, ay=(ly+ry)/2;
+
+  // Head-pose proxy: nose tip (lm[1]) relative to face bounding box centre
+  // face width/height from cheek landmarks 234,454 and chin/forehead 152,10
+  const noseTip=px(lm[1]);
+  const leftCheek=px(lm[234]), rightCheek=px(lm[454]);
+  const forehead=px(lm[10]),  chin=px(lm[152]);
+  const faceW=Math.abs(rightCheek.x-leftCheek.x)||1;
+  const faceH=Math.abs(chin.y-forehead.y)||1;
+  const faceCX=(leftCheek.x+rightCheek.x)/2;
+  const faceCY=(forehead.y+chin.y)/2;
+  const nx=(noseTip.x-faceCX)/faceW;  // -0.5…0.5, positive = face turned right
+  const ny=(noseTip.y-faceCY)/faceH;  // pitch proxy
+
+  return{lx,ly,rx,ry,ax,ay,nx,ny};
 }
 
 /* ═══════════════════════════════════════════════════════════
    GAZE ESTIMATION (per method)
 ═══════════════════════════════════════════════════════════ */
+// Build the 7-feature Ridge vector: [1, ax, ay, nx, ny, ax·nx, ay·ny]
+function makeRidgeFeatureVector(feat){
+  const {ax,ay,nx,ny}=feat;
+  return[1,ax,ay,nx,ny,ax*nx,ay*ny];
+}
+// Build the 8-feature MLP vector (no bias term, TF handles it):
+// [ax, ay, nx, ny, lx, ly, rx, ry]
+function makeMlpFeatureVector(feat){
+  return[feat.ax,feat.ay,feat.nx,feat.ny,feat.lx,feat.ly,feat.rx,feat.ry];
+}
+
 function getCurrentGaze(method){
   if(method==='webgazer') return wgGaze?{...wgGaze}:null;
-  const model=method==='iris-linear'?calModel_iris_linear:calModel_iris_poly;
-  if(!model) return null;
   const feat=extractIrisFeatures();
   if(!feat) return null;
-  let fv;
+
   if(method==='iris-linear'){
-    const ax=(feat.lx+feat.rx)/2,ay=(feat.ly+feat.ry)/2;
-    fv=[1,ax,ay];
+    // Ridge Gaze — synchronous
+    if(!calModel_iris_linear) return null;
+    return modelPredict(calModel_iris_linear, makeRidgeFeatureVector(feat));
   } else {
-    const ax=(feat.lx+feat.rx)/2,ay=(feat.ly+feat.ry)/2;
-    fv=[1,ax,ay,ax*ax,ay*ay,ax*ay];
+    // MLP Gaze — synchronous inference via tf.tidy
+    if(!calModel_iris_poly||mlpTraining) return null;
+    try{
+      const fv=makeMlpFeatureVector(feat);
+      const result=tf.tidy(()=>{
+        const input=tf.tensor2d([fv]);
+        return calModel_iris_poly.predict(input).arraySync()[0];
+      });
+      const W=calModel_iris_poly._scaleW||window.innerWidth;
+      const H=calModel_iris_poly._scaleH||window.innerHeight;
+      return{x:result[0]*W, y:result[1]*H};
+    }catch(_){return null;}
   }
-  return modelPredict(model,fv);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   MLP GAZE — TF.JS NEURAL NETWORK TRAINING
+   Architecture: 8 inputs → Dense(32,relu) → Dense(16,relu) → Dense(2,linear)
+   Trained on all individual click samples from calibration (~9 dots × N clicks)
+═══════════════════════════════════════════════════════════ */
+async function trainMlpModel(calData){
+  const n=calData.length;
+  const xs=calData.map(d=>makeMlpFeatureVector(d));
+  const W=window.innerWidth, H=window.innerHeight;
+  // Normalise targets to [0,1] — model outputs normalised coords, we scale back on inference
+  const ys=calData.map(d=>[d.sx/W, d.sy/H]);
+
+  const xTensor=tf.tensor2d(xs);   // [n,8]
+  const yTensor=tf.tensor2d(ys);   // [n,2]
+
+  const model=tf.sequential({layers:[
+    tf.layers.dense({inputShape:[8],units:32,activation:'relu',
+      kernelInitializer:'glorotUniform',
+      kernelRegularizer:tf.regularizers.l2({l2:1e-4})}),
+    tf.layers.dense({units:16,activation:'relu',
+      kernelRegularizer:tf.regularizers.l2({l2:1e-4})}),
+    tf.layers.dense({units:2,activation:'linear'})
+  ]});
+
+  model.compile({optimizer:tf.train.adam(0.01),loss:'meanSquaredError'});
+
+  const epochs=300;
+  const barFill=document.getElementById('cal-bar-fill');
+  await model.fit(xTensor,yTensor,{
+    epochs,
+    batchSize:Math.min(32,n),
+    shuffle:true,
+    callbacks:{
+      onEpochEnd:(epoch,logs)=>{
+        barFill.style.width=((epoch+1)/epochs*100)+'%';
+        if((epoch+1)%50===0) console.log('[MLP] epoch',(epoch+1),'loss=',logs.loss.toFixed(5));
+      }
+    }
+  });
+
+  xTensor.dispose(); yTensor.dispose();
+
+  // Wrap model so modelPredict-style calls work (scale coords back to px)
+  // We store the raw tf.Sequential as calModel_iris_poly and handle scaling in getCurrentGaze
+  model._scaleW=W; model._scaleH=H;
+  return model;
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -763,7 +858,7 @@ function onCalDotClick(idx){
 }
 
 function finishWebGazerCalibration(){
-  document.getElementById('cal-prog').textContent='✓ WebGazer calibrated! Preparing Iris Linear calibration…';
+  document.getElementById('cal-prog').textContent='✓ WebGazer calibrated! Preparing Ridge Gaze calibration…';
   setTimeout(startIrisLinearCalibration,1500);
 }
 
@@ -792,9 +887,9 @@ function startIrisLinearCalibration(){
   calPhase='iris-linear';
   irisLinearCalData=[];
   _startIrisPhase(
-    'STEP 2 OF 3 — IRIS LINEAR','#3fb950','Iris Linear Calibration',
+    'STEP 2 OF 3 — RIDGE GAZE','#3fb950','Ridge Gaze Calibration',
     'Look at each <span style="color:#f0c000">yellow dot</span> and '+
-    '<b>click it __N__ times</b>.<br>Iris linear model (5 features).'
+    '<b>click it __N__ times</b>.<br>Ridge regression with head-pose correction.'
   );
 }
 
@@ -802,9 +897,9 @@ function startIrisPolyCalibration(){
   calPhase='iris-poly';
   irisPolyCalData=[];
   _startIrisPhase(
-    'STEP 3 OF 3 — IRIS POLY','#f0c000','Iris Poly Calibration',
+    'STEP 3 OF 3 — MLP GAZE','#f0c000','MLP Gaze Calibration',
     'Look at each <span style="color:#f0c000">yellow dot</span> and '+
-    '<b>click it __N__ times</b>.<br>Iris polynomial model (6 features).'
+    '<b>click it __N__ times</b>.<br>Neural network (TF.js) — more clicks = better accuracy.'
   );
 }
 
@@ -815,10 +910,11 @@ function onIrisCalDotClick(idx){
   const {x,y}=pctToPx(CAL_POSITIONS_PCT[idx]);
   const roundMax=wgClicksForRound(calRound);
 
-  // Capture iris features on click
+  // Capture iris + head-pose features on click
   const feat=extractIrisFeatures();
   if(feat){
-    const entry={lx:feat.lx,ly:feat.ly,rx:feat.rx,ry:feat.ry,sx:x,sy:y};
+    const entry={lx:feat.lx,ly:feat.ly,rx:feat.rx,ry:feat.ry,
+                 ax:feat.ax,ay:feat.ay,nx:feat.nx,ny:feat.ny,sx:x,sy:y};
     if(calPhase==='iris-linear') irisLinearCalData.push(entry);
     else irisPolyCalData.push(entry);
   }
@@ -854,27 +950,38 @@ function onIrisCalDotClick(idx){
 }
 
 function finishIrisLinearCalibration(){
-  console.log('[CAL] finishIrisLinearCalibration. data=',irisLinearCalData.length);
-  if(irisLinearCalData.length>=4){
+  console.log('[CAL] finishRidgeGaze. data=',irisLinearCalData.length);
+  if(irisLinearCalData.length>=7){
+    // Ridge regression with 7-feature head-pose-corrected vector, lambda=0.1
     calModel_iris_linear=fitModel(
-      irisLinearCalData.map(d=>{const ax=(d.lx+d.rx)/2,ay=(d.ly+d.ry)/2;return[1,ax,ay];}),
-      irisLinearCalData.map(d=>[d.sx,d.sy])
+      irisLinearCalData.map(d=>makeRidgeFeatureVector(d)),
+      irisLinearCalData.map(d=>[d.sx,d.sy]),
+      0.1
     );
   }
-  console.log('[CAL] iris-linear model=',calModel_iris_linear?'fitted':'NULL (too few points)');
-  document.getElementById('cal-prog').textContent='✓ Iris Linear calibrated! Preparing Iris Poly calibration…';
+  console.log('[CAL] ridge model=',calModel_iris_linear?'fitted':'NULL (too few points)');
+  document.getElementById('cal-prog').textContent='✓ Ridge Gaze calibrated! Preparing MLP Gaze calibration…';
   setTimeout(startIrisPolyCalibration,1500);
 }
 
-function finishIrisPolyCalibration(){
-  console.log('[CAL] finishIrisPolyCalibration. data=',irisPolyCalData.length);
-  if(irisPolyCalData.length>=6){
-    calModel_iris_poly=fitModel(
-      irisPolyCalData.map(d=>{const ax=(d.lx+d.rx)/2,ay=(d.ly+d.ry)/2;return[1,ax,ay,ax*ax,ay*ay,ax*ay];}),
-      irisPolyCalData.map(d=>[d.sx,d.sy])
-    );
+async function finishIrisPolyCalibration(){
+  console.log('[CAL] finishMlpGaze. data=',irisPolyCalData.length);
+  if(irisPolyCalData.length>=8){
+    document.getElementById('cal-prog').textContent='Training MLP neural network…';
+    document.getElementById('cal-bar-fill').style.width='0%';
+    document.getElementById('cal-bar-fill').style.background='#f0c000';
+    document.getElementById('cal-bar-wrap').style.display='block';
+    mlpTraining=true;
+    try{
+      calModel_iris_poly=await trainMlpModel(irisPolyCalData);
+      console.log('[CAL] MLP model trained');
+    }catch(e){
+      console.error('[CAL] MLP training error',e);
+    }
+    mlpTraining=false;
+  } else {
+    console.log('[CAL] MLP skipped — too few points');
   }
-  console.log('[CAL] iris-poly model=',calModel_iris_poly?'fitted':'NULL (too few points)');
   isCalibrated=true;
   document.getElementById('cal-prog').textContent='✓ All 3 methods calibrated!';
   document.getElementById('cal-bar-fill').style.width='100%';
@@ -907,7 +1014,10 @@ function showExpSelectPhase(){
 }
 function selectExperiment(n){selectedExperiment=n;showReadyPhase();}
 function doRecalibrate(){
-  isCalibrated=false;calModel_iris_linear=null;calModel_iris_poly=null;wgGaze=null;
+  isCalibrated=false;
+  calModel_iris_linear=null;
+  if(calModel_iris_poly){try{calModel_iris_poly.dispose();}catch(_){} calModel_iris_poly=null;}
+  wgGaze=null;mlpTraining=false;
   calPhase='webgazer';irisLinearCalData=[];irisPolyCalData=[];
   beginCalibration();
 }
