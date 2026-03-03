@@ -31,10 +31,6 @@
       z-index:8500;display:none
     }
     #gaze-dot-webgazer{background:rgba(88,166,255,0.55);border:2px solid #58a6ff;box-shadow:0 0 10px rgba(88,166,255,0.8)}
-    #gaze-dot-iris-linear{background:rgba(63,185,80,0.55);border:2px solid #3fb950;box-shadow:0 0 10px rgba(63,185,80,0.8)}
-    #gaze-dot-iris-poly{background:rgba(240,192,0,0.55);border:2px solid #f0c000;box-shadow:0 0 10px rgba(240,192,0,0.8)}
-    #mlp-status{position:fixed;bottom:12px;left:50%;transform:translateX(-50%);background:rgba(13,17,23,.88);border:1px solid #30363d;border-radius:8px;padding:6px 16px;font-size:.78rem;color:#8b949e;z-index:950;pointer-events:none;display:none}
-
     /* ── Buttons ─────────────────────────────────────────── */
     .btn{padding:10px 22px;border-radius:8px;border:none;cursor:pointer;font-size:.9rem;font-weight:600;transition:opacity .2s,background .2s}
     .btn:disabled{opacity:.35;cursor:not-allowed}
@@ -104,7 +100,7 @@
     /* ── Experiment 2 ────────────────────────────────────── */
     #ph-experiment2{position:relative;background:#0d1117;justify-content:center;align-items:center}
     #exp2-para-wrap{max-width:860px;width:90%;text-align:justify;line-height:2.4;font-size:1.45rem;padding:120px 20px 60px;user-select:none}
-    .exp2-word{color:rgba(230,237,243,.25);font-weight:700;transition:color .12s;cursor:default;display:inline}
+    .exp2-word{color:#0d1117;font-weight:700;transition:color .12s;cursor:default;display:inline}
     .exp2-word.active{color:#f0c000;text-shadow:0 0 20px rgba(240,192,0,.6)}
     .exp2-word.done{color:rgba(63,185,80,.45)}
     #exp2-status{position:fixed;top:50%;left:16px;transform:translateY(-50%);background:rgba(22,27,34,.92);border:1px solid #30363d;border-radius:10px;padding:12px 20px;text-align:center;z-index:820;min-width:200px}
@@ -133,7 +129,7 @@
     .results-hdr .sub{color:#8b949e;font-size:.85rem;margin-top:4px}
     .section{margin-bottom:40px}
     .section h2{color:#58a6ff;font-size:1rem;margin-bottom:16px;border-bottom:1px solid #21262d;padding-bottom:8px;letter-spacing:.3px}
-    .method-summary-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:20px}
+    .method-summary-grid{display:grid;grid-template-columns:1fr;gap:14px;margin-bottom:20px;max-width:340px}
     .ms-card{background:#161b22;border:2px solid #30363d;border-radius:10px;padding:14px 16px}
     .ms-card h4{font-size:.88rem;margin-bottom:6px}
     .ms-card-wg{border-color:rgba(88,166,255,.4)}.ms-card-wg h4{color:#58a6ff}
@@ -149,8 +145,12 @@
     .tbl td{color:#e6edf3}
     .tbl tr.total td{font-weight:700;color:#58a6ff;border-bottom:none}
     .hm-grid{display:grid;gap:8px}
+    .hm-grid.cols1{grid-template-columns:1fr;max-width:50%}
+    .hm-grid.cols2{grid-template-columns:repeat(2,1fr)}
     .hm-grid.cols3{grid-template-columns:repeat(3,1fr)}
     .hm-header-row{display:grid;gap:8px;margin-bottom:4px}
+    .hm-header-row.cols1{grid-template-columns:1fr;max-width:50%}
+    .hm-header-row.cols2{grid-template-columns:repeat(2,1fr)}
     .hm-header-row.cols3{grid-template-columns:repeat(3,1fr)}
     .hm-cell{background:#161b22;border:1px solid #30363d;border-radius:6px;padding:6px;text-align:center}
     .hm-cell img{width:100%;height:auto;border-radius:4px;display:block}
@@ -183,38 +183,27 @@
     .ec .tag{margin-bottom:8px;display:inline-block}
 
     @media(max-width:700px){
-      .method-info-box,.method-summary-grid,.exp-grid,.hm-grid.cols3,.hm-header-row.cols3{grid-template-columns:1fr}
+      .method-info-box,.method-summary-grid,.exp-grid,.hm-grid.cols1,.hm-grid.cols2,.hm-grid.cols3,.hm-header-row.cols1,.hm-header-row.cols2,.hm-header-row.cols3{grid-template-columns:1fr;max-width:100%}
     }
   </style>
 </head>
 <body>
 
 <!-- ─── Three gaze dots ────────────────────────────────── -->
-<div id="gaze-dot-webgazer"    class="gaze-dot-m"></div>
-<div id="gaze-dot-iris-linear" class="gaze-dot-m"></div>
-<div id="gaze-dot-iris-poly"   class="gaze-dot-m"></div>
+<div id="gaze-dot-webgazer" class="gaze-dot-m"></div>
 <div id="toast"></div>
-<div id="mlp-status"></div>
 
 <!-- ══════════════════════════════════════════════════════
      PHASE 0 – Landing
 ══════════════════════════════════════════════════════════ -->
 <div id="ph-select" class="phase active">
   <h1 style="color:#58a6ff;font-size:1.9rem;margin-bottom:6px">Eye Gaze Estimation Experiment</h1>
-  <p style="color:#8b949e;margin-bottom:24px">Calibrate once — then all 3 methods run simultaneously in each experiment</p>
+  <p style="color:#8b949e;margin-bottom:24px">Calibrate once — WebGazer collects gaze data in each experiment</p>
 
-  <div class="method-info-box">
+  <div class="method-info-box" style="grid-template-columns:1fr;max-width:340px">
     <div class="mib mib-wg">
-      <h3>WG Ridge <span class="tag tag-wg">Method 1</span></h3>
-      <p>Standard Ridge Regression on eye-patch appearance features (WebGazer.js ZW[0]). Gaze dot shown in <b style="color:#58a6ff">blue</b>.</p>
-    </div>
-    <div class="mib mib-ml">
-      <h3>WG Weighted <span class="tag tag-ml">Method 2</span></h3>
-      <p>Weighted Ridge Regression — recent calibration samples weighted more heavily (WebGazer.js ZW[1]). Gaze dot shown in <b style="color:#3fb950">green</b>.</p>
-    </div>
-    <div class="mib mib-poly">
-      <h3>WG Threaded <span class="tag tag-poly">Method 3</span></h3>
-      <p>Ridge Regression computed in a Web Worker for non-blocking inference (WebGazer.js ZW[2]). Gaze dot shown in <b style="color:#f0c000">yellow</b>.</p>
+      <h3>WebGazer <span class="tag tag-wg">Method</span></h3>
+      <p>Ridge Regression on eye-patch appearance features (WebGazer.js). Gaze dot shown in <b style="color:#58a6ff">blue</b>.</p>
     </div>
   </div>
 
@@ -260,7 +249,7 @@
   <div style="max-width:580px;width:100%;background:#161b22;border:1px solid #30363d;border-radius:14px;padding:36px 40px;text-align:center">
     <div style="font-size:2rem;margin-bottom:12px">👁</div>
     <h2 id="ready-title" style="color:#58a6ff;margin-bottom:6px">Calibration Complete</h2>
-    <p style="color:#8b949e;font-size:.85rem;margin-bottom:24px">All 3 methods will run simultaneously during the experiment</p>
+    <p style="color:#8b949e;font-size:.85rem;margin-bottom:24px">WebGazer will collect gaze data during the experiment</p>
     <div id="ready-instructions" style="text-align:left;background:#0d1117;border-radius:10px;padding:20px 24px;margin-bottom:28px;font-size:.88rem;line-height:1.8"></div>
     <button class="btn btn-green" onclick="startCurrentExperiment()" style="font-size:1rem;padding:12px 40px">Start Experiment →</button>
     <div style="margin-top:12px">
@@ -274,17 +263,17 @@
 ══════════════════════════════════════════════════════════ -->
 <div id="ph-exp-select" class="phase" style="align-items:center;justify-content:center;padding:40px 20px;text-align:center">
   <h1 style="color:#58a6ff;font-size:1.6rem;margin-bottom:6px">Choose Experiment</h1>
-  <p id="exp-sel-status" style="color:#8b949e;font-size:.88rem;margin-bottom:28px">✓ Calibrated — all 3 methods ready</p>
+  <p id="exp-sel-status" style="color:#8b949e;font-size:.88rem;margin-bottom:28px">✓ Calibrated — WebGazer ready</p>
   <div class="exp-grid">
     <div class="ec" onclick="selectExperiment(1)">
       <span class="tag tag-wg">Experiment 1</span>
       <h3>Fixation Accuracy</h3>
-      <p>9 static target dots appear one by one. Look at each dot steadily. All 3 methods measure gaze accuracy simultaneously.</p>
+      <p>9 static target dots appear one by one. Look at each dot steadily. WebGazer measures gaze accuracy.</p>
     </div>
     <div class="ec" onclick="selectExperiment(2)">
       <span class="tag tag-ml">Experiment 2</span>
       <h3>Reading Task</h3>
-      <p>A paragraph shown word by word. Look at each highlighted word. All 3 methods compare gaze accuracy during natural reading.</p>
+      <p>A paragraph shown word by word. Look at each highlighted word. WebGazer compares gaze accuracy during natural reading.</p>
     </div>
     <div class="ec" onclick="selectExperiment(3)">
       <span class="tag tag-poly">Experiment 3</span>
@@ -314,14 +303,12 @@
 <div id="ph-experiment" class="phase">
   <div id="exp-dot"></div>
   <div id="exp-status">
-    <h3>All 3 Methods</h3>
+    <h3>WebGazer</h3>
     <div id="exp-timer">–</div>
     <div id="exp-progress">Dot 1 / 9</div>
     <div id="exp-collect-badge">Waiting 1s…</div>
     <div class="dot-legend">
-      <div class="dot-legend-item"><div class="dot-legend-circle" style="background:#58a6ff"></div>WG Ridge</div>
-      <div class="dot-legend-item"><div class="dot-legend-circle" style="background:#3fb950"></div>WG Weighted</div>
-      <div class="dot-legend-item"><div class="dot-legend-circle" style="background:#f0c000"></div>WG Threaded</div>
+      <div class="dot-legend-item"><div class="dot-legend-circle" style="background:#58a6ff"></div>WebGazer</div>
     </div>
     <div style="margin-top:8px">
       <button id="btn-toggle-gaze" onclick="toggleGazeDot()"
@@ -337,14 +324,12 @@
 ══════════════════════════════════════════════════════════ -->
 <div id="ph-experiment2" class="phase">
   <div id="exp2-status">
-    <h3>All 3 Methods</h3>
+    <h3>WebGazer</h3>
     <div id="exp2-timer">–</div>
     <div id="exp2-progress">Word 1 / –</div>
     <div id="exp2-collect-badge">Waiting…</div>
     <div class="dot-legend" style="margin-top:8px">
-      <div class="dot-legend-item"><div class="dot-legend-circle" style="background:#58a6ff"></div>Ridge</div>
-      <div class="dot-legend-item"><div class="dot-legend-circle" style="background:#3fb950"></div>Weighted</div>
-      <div class="dot-legend-item"><div class="dot-legend-circle" style="background:#f0c000"></div>Threaded</div>
+      <div class="dot-legend-item"><div class="dot-legend-circle" style="background:#58a6ff"></div>WebGazer</div>
     </div>
     <div style="margin-top:8px">
       <button id="btn-toggle-gaze2" onclick="toggleGazeDot()"
@@ -379,7 +364,7 @@
   <div id="exp4-task">+</div>
   <div id="exp4-timer">–</div>
   <div id="exp4-status">
-    <div>PIR <span id="exp4-pir" style="color:#e6edf3;font-weight:700">–</span></div>
+    <div>PIR <span id="exp4-pir" style="color:#e6edf3;font-weight:700">–</span> &nbsp;·&nbsp; <span id="exp4-mm" style="color:#f0c000;font-weight:700">–</span> mm</div>
     <div id="exp4-progress" style="margin-top:4px;font-size:.72rem"></div>
   </div>
 </div>
@@ -394,6 +379,7 @@
   <div id="exp5-status" style="background:rgba(0,0,0,.6);border:1px solid rgba(255,255,255,.2);color:#fff">
     <span id="exp5-phase" style="font-weight:700">Baseline</span>
     &nbsp;·&nbsp;PIR <span id="exp5-pir" style="font-weight:700">–</span>
+    &nbsp;·&nbsp;<span id="exp5-mm" style="font-weight:700">–</span> mm
     &nbsp;·&nbsp;<span id="exp5-timer">–</span>
   </div>
 </div>
@@ -422,7 +408,7 @@
   </div>
 
   <div class="section" id="sec-chart">
-    <h2 id="sec-chart-title">Gaze Error per Target — All 3 Methods</h2>
+    <h2 id="sec-chart-title">Gaze Error per Target — WebGazer</h2>
     <div class="chart-scroll"><div class="chart-wrap"><canvas id="comparison-chart"></canvas></div></div>
   </div>
 
@@ -451,10 +437,10 @@ const CAL_POSITIONS_PCT = [
   [10,50],[50,50],[90,50],
   [10,90],[50,90],[90,90]
 ];
-const METHODS = ['webgazer','iris-linear','iris-poly'];
-const METHOD_LABELS = {'webgazer':'WG Ridge','iris-linear':'WG Weighted','iris-poly':'WG Threaded'};
-const METHOD_COLORS = {'webgazer':'#58a6ff','iris-linear':'#3fb950','iris-poly':'#f0c000'};
-const METHOD_CSS    = {'webgazer':'ms-card-wg','iris-linear':'ms-card-ml','iris-poly':'ms-card-poly'};
+const METHODS = ['webgazer'];
+const METHOD_LABELS = {'webgazer':'WebGazer'};
+const METHOD_COLORS = {'webgazer':'#58a6ff'};
+const METHOD_CSS    = {'webgazer':'ms-card-wg'};
 
 let DOT_DURATION_MS  = 5000;
 const SKIP_MS        = 1000;
@@ -470,6 +456,9 @@ const EXP3_DIRECTIONS = [
 ];
 const EXP3_DURATION_MS = 5000;
 const EXP3_SKIP_MS     = 500;
+
+/* Average human iris diameter used to convert PIR → pupil mm */
+const IRIS_REAL_MM = 11.7;
 
 /* ── Experiment 4 — Cognitive Load phases ────────────────── */
 const EXP4_PHASES=[
@@ -496,16 +485,10 @@ const EXP2_PARAGRAPH =
   'Unlike recurrent networks that process tokens sequentially Transformers operate in ' +
   'parallel enabling efficient scaling to billions of parameters. ' +
   'Positional encodings are added to token embeddings so the model retains awareness ' +
-  'of word order despite its non-sequential design. ' +
-  'Variational Autoencoders proposed by Kingma and Welling learn continuous latent ' +
-  'representations by encoding inputs as Gaussian distributions in a lower dimensional space. ' +
-  'During training the model minimizes reconstruction loss while regularizing the latent ' +
-  'space through KL divergence ensuring the learned distribution stays close to a standard normal. ' +
-  'By sampling from this structured space VAEs can generate diverse and semantically coherent ' +
-  'outputs making them powerful tools for generative modeling in both vision and language domains.';
+  'of word order despite its non-sequential design. ';
 const EXP2_WORDS = EXP2_PARAGRAPH.split(/\s+/).filter(w=>w.length>0);
-let EXP2_WORD_DURATION_MS = 300;
-let EXP2_WORD_SKIP_MS     = 100;
+let EXP2_WORD_DURATION_MS = 100; //300
+let EXP2_WORD_SKIP_MS     = 0; //100
 
 /* ═══════════════════════════════════════════════════════════
    STATE
@@ -523,7 +506,7 @@ let faceLoopId   = null;
 let currentLM    = null;
 let selectDrawId = null;
 
-// Calibration — single WebGazer phase (all 3 backends train simultaneously)
+// Calibration — single WebGazer phase
 let calIndex      = 0;
 let wgClickCount  = 0;
 let calDotEls     = [];
@@ -531,18 +514,16 @@ let calTotalRounds = 1;
 let calRound       = 0;
 let calDotTotal    = [];
 
-// WebGazer — 3 backends: ZW[0]=ridge, ZW[1]=weightedRidge, ZW[2]=threadedRidge
+// WebGazer
 let wgRunning       = false;
-let wgGaze          = null;  // ZW[0] ridge
-let wgGazeWeighted  = null;  // ZW[1] weightedRidge
-let wgGazeThreaded  = null;  // ZW[2] threadedRidge
+let wgGaze          = null;  // WebGazer ridge prediction
 
-// Gaze dot visibility (H key toggles all 3)
+// Gaze dot visibility (H key toggles)
 let gazeVisible = false;
 
 // Experiment 1 state (method-keyed)
 let expDotIndex    = 0;
-let expSamples     = {};  // {webgazer:[], iris-linear:[], iris-poly:[]}
+let expSamples     = {};  // {webgazer:[]}
 let expResults     = {};
 let expSampleId    = null;
 let expDotTimer    = null;
@@ -577,7 +558,9 @@ let exp4StartT      = 0;
 let exp4SampleId    = null;
 let exp4TaskId      = null;
 let exp4TimerId     = null;
-let exp4PirSmoothed = null;
+let exp4PirSmoothed    = null;
+let exp4IrisPxSm       = null;
+let exp4PupilPxSm      = null;
 
 // Experiment 5 state (luminance response)
 let exp5PhaseIdx    = 0;
@@ -585,7 +568,9 @@ let exp5PhaseData   = [];
 let exp5StartT      = 0;
 let exp5SampleId    = null;
 let exp5TimerId     = null;
-let exp5PirSmoothed = null;
+let exp5PirSmoothed    = null;
+let exp5IrisPxSm       = null;
+let exp5PupilPxSm      = null;
 
 // Chart instances
 let compChartInst  = null;
@@ -593,9 +578,7 @@ let chartInstances = [];
 
 
 function getCurrentGaze(method){
-  if(method==='webgazer')    return wgGaze         ?{...wgGaze}        :null;
-  if(method==='iris-linear') return wgGazeWeighted ?{...wgGazeWeighted}:null;
-  if(method==='iris-poly')   return wgGazeThreaded ?{...wgGazeThreaded}:null;
+  if(method==='webgazer') return wgGaze?{...wgGaze}:null;
   return null;
 }
 
@@ -692,9 +675,10 @@ function toggleGazeDot(){
   if(!gazeVisible) updateGazeDot(null,null,null);
 }
 function avg(arr){return arr.length?arr.reduce((a,b)=>a+b,0)/arr.length:0;}
+function std(arr){if(arr.length<2)return 0;const m=avg(arr);return Math.sqrt(arr.reduce((s,v)=>s+(v-m)**2,0)/arr.length);}
 
 /* ═══════════════════════════════════════════════════════════
-   CALIBRATION (unified — click feeds all 3 methods)
+   CALIBRATION
 ═══════════════════════════════════════════════════════════ */
 async function beginCalibration(){
   const clicksInput=document.getElementById('wg-clicks-input');
@@ -702,7 +686,7 @@ async function beginCalibration(){
   showPhase('ph-calibrate');
 
   calIndex=0;
-  wgGaze=null;wgGazeWeighted=null;wgGazeThreaded=null;wgClickCount=0;
+  wgGaze=null;wgClickCount=0;
   calTotalRounds=Math.ceil(WG_CLICKS_NEEDED/WG_CLICKS_PER_ROUND);
   calRound=0;calDotTotal=new Array(9).fill(0);
   chartInstances.forEach(c=>c.destroy());chartInstances=[];
@@ -720,7 +704,7 @@ async function beginCalibration(){
     '<b>click it '+nClicks+' times</b>.<br>'+
     calTotalRounds+' round'+(calTotalRounds>1?'s':'')+' × '+WG_CLICKS_PER_ROUND+
     ' clicks = <b>'+WG_CLICKS_NEEDED+' total</b> per dot<br>'+
-    '<span style="color:#8b949e;font-size:.8rem">All 3 backends (Ridge / Weighted / Threaded) train simultaneously</span>';
+    '<span style="color:#8b949e;font-size:.8rem">Click each dot to train WebGazer</span>';
   document.getElementById('cal-bar-wrap').style.display='none';
   document.getElementById('cal-msg').textContent='';
 
@@ -730,13 +714,7 @@ async function beginCalibration(){
     await webgazer.setGazeListener(data=>{
       if(!data) return;
       wgGaze={x:data.x,y:data.y};
-      if(data.all){
-        if(data.all[1]) wgGazeWeighted={x:data.all[1].x,y:data.all[1].y};
-        if(data.all[2]) wgGazeThreaded={x:data.all[2].x,y:data.all[2].y};
-      }
     }).begin();
-    webgazer.addRegression('weightedRidge');
-    webgazer.addRegression('threadedRidge');
     webgazer.showPredictionPoints(false);webgazer.showVideo(false);
     webgazer.showFaceOverlay(false);webgazer.showFaceFeedbackBox(false);
     wgRunning=true;
@@ -770,7 +748,7 @@ function onCalDotClick(idx){
   const {x,y}=pctToPx(CAL_POSITIONS_PCT[idx]);
   const roundMax=wgClicksForRound(calRound);
 
-  // Feed WebGazer — all 3 backends (ZW[0,1,2]) receive data simultaneously
+  // Feed WebGazer
   webgazer.recordScreenPosition(x,y,'click');
 
   wgClickCount++;calDotTotal[idx]++;
@@ -802,7 +780,7 @@ function onCalDotClick(idx){
 
 function finishWebGazerCalibration(){
   isCalibrated=true;
-  document.getElementById('cal-prog').textContent='✓ All 3 WebGazer backends calibrated!';
+  document.getElementById('cal-prog').textContent='✓ WebGazer calibrated!';
   document.getElementById('cal-bar-fill').style.width='100%';
   document.getElementById('cal-bar-fill').style.background='#3fb950';
   document.getElementById('cal-bar-wrap').style.display='block';
@@ -829,13 +807,13 @@ function activateCalDot(idx){calDotEls.forEach((d,i)=>d.classList.toggle('active
 ═══════════════════════════════════════════════════════════ */
 function showExpSelectPhase(){
   isCalibrated=true;
-  document.getElementById('exp-sel-status').textContent='✓ Calibrated — all 3 methods ready';
+  document.getElementById('exp-sel-status').textContent='✓ Calibrated — WebGazer ready';
   showPhase('ph-exp-select');
 }
 function selectExperiment(n){selectedExperiment=n;showReadyPhase();}
 function doRecalibrate(){
   isCalibrated=false;
-  wgGaze=null;wgGazeWeighted=null;wgGazeThreaded=null;
+  wgGaze=null;
   beginCalibration();
 }
 function runAnotherExperiment(){showExpSelectPhase();}
@@ -858,7 +836,7 @@ function showReadyPhase(){
       <li><span style="color:#e6edf3">9 dots</span> appear one by one on screen</li>
       <li>Each dot shown for a configurable duration (default <span style="color:#e6edf3">5 s</span>)</li>
       <li>First <span style="color:#e6edf3">1 s</span> settling pause — move gaze to dot</li>
-      <li>All 3 WebGazer backends (Ridge / Weighted / Threaded) collect data simultaneously (~15 samples/s)</li>
+      <li>WebGazer collects gaze data (~15 samples/s)</li>
       <li>Press ${hKey} to show/hide the 3 colored gaze dots</li>
     </ul>
     <div style="margin-top:14px;display:flex;gap:20px;align-items:center">
@@ -871,12 +849,12 @@ function showReadyPhase(){
       <li>A paragraph about <span style="color:#e6edf3">Transformers &amp; VAEs</span> is displayed</li>
       <li><span style="color:#e6edf3">Look at and read aloud</span> each highlighted word</li>
       <li>Total: <span style="color:#e6edf3">${EXP2_WORDS.length} words</span></li>
-      <li>All 3 WebGazer backends collect gaze simultaneously per word</li>
+      <li>WebGazer collects gaze per word</li>
       <li>Press ${hKey} to show/hide the 3 colored gaze dots</li>
     </ul>
     <div style="margin-top:14px;display:flex;gap:20px;align-items:center;flex-wrap:wrap">
       <label style="display:flex;align-items:center;gap:8px;color:#8b949e;font-size:.85rem">
-        Settle time (s):<input id="exp2-settle-input" type="number" min="0.05" max="2" step="0.05" value="0.1" style="${inStyle}"/>
+        Settle time (s):<input id="exp2-settle-input" type="number" min="0" max="2" step="0.05" value="0.1" style="${inStyle}"/>
       </label>
       <label style="display:flex;align-items:center;gap:8px;color:#8b949e;font-size:.85rem">
         Collect time (s):<input id="exp2-collect-input" type="number" min="0.1" max="5" step="0.05" value="0.2" style="${inStyle}"/>
@@ -886,7 +864,7 @@ function showReadyPhase(){
     html+=`<ul style="color:#8b949e;padding-left:18px;margin:0">
       <li>Screen changes colour showing a <span style="color:#e6edf3">direction arrow</span></li>
       <li>Look <span style="color:#e6edf3">outside the screen</span> in that direction for <span style="color:#e6edf3">5 seconds</span></li>
-      <li>First <span style="color:#e6edf3">0.5 s</span> settling pause — all 3 methods then collect data</li>
+      <li>First <span style="color:#e6edf3">0.5 s</span> settling pause — WebGazer then collects data</li>
       <li>After 5 s, click <span style="color:#e6edf3">Next</span> to proceed</li>
       <li>4 directions: <span style="color:#e6edf3">Right → Left → Up → Down</span></li>
       <li>Metric: on-screen gaze points while looking away — <span style="color:#e6edf3">fewer = better</span></li>
@@ -959,13 +937,13 @@ function startExperiment(){
   _dbgTick=0;
   if(!faceLoopId) startFaceLoop();  // ensure face loop is running during experiment
   console.log('[EXP] startExperiment() ─────────────────────');
-  console.log('  wgRunning=',wgRunning,'backends=',webgazer.getRegression?webgazer.getRegression().length:'?');
-  console.log('  wgGaze=',wgGaze,'wgGazeWeighted=',wgGazeWeighted,'wgGazeThreaded=',wgGazeThreaded);
+  console.log('  wgRunning=',wgRunning);
+  console.log('  wgGaze=',wgGaze);
   const durS=parseFloat(document.getElementById('exp1-duration-input')?.value)||5;
   DOT_DURATION_MS=Math.round(Math.max(1,durS)*1000);
   expDotIndex=0;
-  expSamples={'webgazer':[],'iris-linear':[],'iris-poly':[]};
-  expResults={'webgazer':[],'iris-linear':[],'iris-poly':[]};
+  expSamples={'webgazer':[]};
+  expResults={'webgazer':[]};
   gazeVisible=false;updateGazeDot(null,null,null);
   const btn=document.getElementById('btn-toggle-gaze');
   if(btn){btn.textContent='Show Gaze [H]';btn.style.color='#58a6ff';btn.style.borderColor='#58a6ff';}
@@ -1028,9 +1006,7 @@ function collectGazeSample(){
     console.log(
       '[DBG collectGazeSample] tick='+_dbgTick,
       'dot='+(expDotIndex+1),
-      'wgGaze=',wgGaze?('x='+Math.round(wgGaze.x)+' y='+Math.round(wgGaze.y)):'NULL',
-      'wgWeighted=',wgGazeWeighted?('x='+Math.round(wgGazeWeighted.x)+' y='+Math.round(wgGazeWeighted.y)):'NULL',
-      'wgThreaded=',wgGazeThreaded?('x='+Math.round(wgGazeThreaded.x)+' y='+Math.round(wgGazeThreaded.y)):'NULL'
+      'wgGaze=',wgGaze?('x='+Math.round(wgGaze.x)+' y='+Math.round(wgGaze.y)):'NULL'
     );
   }
 
@@ -1048,17 +1024,24 @@ function finishExperiment(){
   updateGazeDot(null,null,null);
   document.getElementById('exp-dot').classList.remove('show');
   if(wgRunning) try{webgazer.addMouseEventListeners();}catch(_){}
-  const run={experimentType:1,timestamp:new Date().toISOString(),wgClicksPerDot:WG_CLICKS_NEEDED,results:{}};
+  const screenDiag=+Math.hypot(window.innerWidth,window.innerHeight).toFixed(1);
+  const run={experimentType:1,timestamp:new Date().toISOString(),wgClicksPerDot:WG_CLICKS_NEEDED,screenW:window.innerWidth,screenH:window.innerHeight,screenDiag,results:{}};
   METHODS.forEach(m=>{
     const dotResults=expResults[m].map((r,i)=>{
       const dists=r.samples.map(s=>s.dist);
       const mean=dists.length?avg(dists):0;
+      const pctErr=+(mean/screenDiag*100).toFixed(2);
       return{dotIdx:i,gtX:Math.round(r.gtX),gtY:Math.round(r.gtY),pct:r.pct,
         samples:r.samples,heatmapUrl:renderHeatmap(r.samples,r.gtX,r.gtY),
-        mean:+mean.toFixed(1),min:+(dists.length?Math.min(...dists):0).toFixed(1),
+        mean:+mean.toFixed(1),std:+std(dists).toFixed(1),pctErr,
+        min:+(dists.length?Math.min(...dists):0).toFixed(1),
         max:+(dists.length?Math.max(...dists):0).toFixed(1)};
     });
-    run.results[m]={dotResults,overallMean:dotResults.length?+(avg(dotResults.map(d=>d.mean))).toFixed(1):0};
+    const allDists=dotResults.flatMap(d=>d.samples.map(s=>s.dist));
+    const overallMean=dotResults.length?+(avg(dotResults.map(d=>d.mean))).toFixed(1):0;
+    const overallStd=+(std(allDists)).toFixed(1);
+    const overallPct=+(overallMean/screenDiag*100).toFixed(2);
+    run.results[m]={dotResults,overallMean,overallStd,overallPct};
   });
   allRuns.push(run);latestRunIdx=allRuns.length-1;
   stopFaceLoop();renderResults(latestRunIdx);showPhase('ph-results');updateRunsList();
@@ -1068,13 +1051,13 @@ function finishExperiment(){
    EXPERIMENT 2 — WORD READING
 ═══════════════════════════════════════════════════════════ */
 function startExperiment2(){
-  const settleS=parseFloat(document.getElementById('exp2-settle-input')?.value)||0.1;
+  const settleS=parseFloat(document.getElementById('exp2-settle-input')?.value)||0;
   const collectS=parseFloat(document.getElementById('exp2-collect-input')?.value)||0.2;
-  EXP2_WORD_SKIP_MS=Math.round(Math.max(0.05,settleS)*1000);
-  EXP2_WORD_DURATION_MS=EXP2_WORD_SKIP_MS+Math.round(Math.max(0.1,collectS)*1000);
+  EXP2_WORD_SKIP_MS=Math.round(Math.max(0,settleS)*1000);
+  EXP2_WORD_DURATION_MS=EXP2_WORD_SKIP_MS+Math.round(Math.max(0,collectS)*1000);
   exp2WordIndex=0;
-  exp2Samples={'webgazer':[],'iris-linear':[],'iris-poly':[]};
-  exp2Results={'webgazer':[],'iris-linear':[],'iris-poly':[]};
+  exp2Samples={'webgazer':[]};
+  exp2Results={'webgazer':[]};
   gazeVisible=false;updateGazeDot(null,null,null);
   const btn2=document.getElementById('btn-toggle-gaze2');
   if(btn2){btn2.textContent='Show Gaze [H]';btn2.style.color='#58a6ff';btn2.style.borderColor='#58a6ff';}
@@ -1141,17 +1124,24 @@ function finishExperiment2(){
   const lastSpan=document.getElementById('exp2w-'+(EXP2_WORDS.length-1));
   if(lastSpan) lastSpan.className='exp2-word done';
   if(wgRunning) try{webgazer.addMouseEventListeners();}catch(_){}
-  const run={experimentType:2,timestamp:new Date().toISOString(),results:{}};
+  const screenDiag2=+Math.hypot(window.innerWidth,window.innerHeight).toFixed(1);
+  const run={experimentType:2,timestamp:new Date().toISOString(),screenW:window.innerWidth,screenH:window.innerHeight,screenDiag:screenDiag2,results:{}};
   METHODS.forEach(m=>{
     const wordResults=exp2Results[m].map(r=>{
       const dists=r.samples.map(s=>s.dist);
       const mean=dists.length?avg(dists):0;
+      const pctErr=+(mean/screenDiag2*100).toFixed(2);
       return{wordIdx:r.wordIdx,word:r.word,gtX:r.gtX,gtY:r.gtY,
         samples:r.samples,
-        mean:+mean.toFixed(1),min:+(dists.length?Math.min(...dists):0).toFixed(1),
+        mean:+mean.toFixed(1),std:+std(dists).toFixed(1),pctErr,
+        min:+(dists.length?Math.min(...dists):0).toFixed(1),
         max:+(dists.length?Math.max(...dists):0).toFixed(1)};
     });
-    run.results[m]={wordResults,overallMean:wordResults.length?+(avg(wordResults.map(w=>w.mean))).toFixed(1):0};
+    const allDists2=wordResults.flatMap(w=>w.samples.map(s=>s.dist));
+    const overallMean=wordResults.length?+(avg(wordResults.map(w=>w.mean))).toFixed(1):0;
+    const overallStd=+(std(allDists2)).toFixed(1);
+    const overallPct=+(overallMean/screenDiag2*100).toFixed(2);
+    run.results[m]={wordResults,overallMean,overallStd,overallPct};
   });
   allRuns.push(run);latestRunIdx=allRuns.length-1;
   stopFaceLoop();renderResults(latestRunIdx);showPhase('ph-results');updateRunsList();
@@ -1162,7 +1152,7 @@ function finishExperiment2(){
 ═══════════════════════════════════════════════════════════ */
 function startExperiment3(){
   exp3DirIndex=0;exp3Results=[];
-  exp3Samples={'webgazer':[],'iris-linear':[],'iris-poly':[]};
+  exp3Samples={'webgazer':[]};
   gazeVisible=false;updateGazeDot(null,null,null);
   if(wgRunning) try{webgazer.removeMouseEventListeners();}catch(_){}
   showPhase('ph-experiment3');setTimeout(showNextDirection3,600);
@@ -1228,9 +1218,14 @@ function finishExperiment3(){
     const totalOnScreen=exp3Results.reduce((s,r)=>s+(r.methods[m]?.onScreen||0),0);
     const totalSamples=exp3Results.reduce((s,r)=>s+(r.methods[m]?.total||0),0);
     const leakageRate=totalSamples?+(totalOnScreen/totalSamples*100).toFixed(1):0;
+    const accuracyRate=totalSamples?+((totalSamples-totalOnScreen)/totalSamples*100).toFixed(1):100;
     run.results[m]={
-      dirResults:exp3Results.map(r=>({dirIdx:r.dirIdx,dirId:r.dirId,dirLabel:r.dirLabel,dirArrow:r.dirArrow,...r.methods[m],heatmapUrl:renderHeatmapExp3(r.methods[m].samples||[])})),
-      totalOnScreen,totalSamples,leakageRate
+      dirResults:exp3Results.map(r=>{
+        const md=r.methods[m]||{samples:[],onScreen:0,total:0};
+        const acc=md.total?+((md.total-md.onScreen)/md.total*100).toFixed(1):100;
+        return{dirIdx:r.dirIdx,dirId:r.dirId,dirLabel:r.dirLabel,dirArrow:r.dirArrow,...md,acc,heatmapUrl:renderHeatmapExp3(md.samples||[])};
+      }),
+      totalOnScreen,totalSamples,leakageRate,accuracyRate
     };
   });
   allRuns.push(run);latestRunIdx=allRuns.length-1;
@@ -1316,7 +1311,7 @@ function startExperiment4(){
   exp4PhaseIdx=0;
   exp4PhaseData=EXP4_PHASES.map(p=>({...p,startT:0,endT:0,samples:[],mean:0}));
   exp4StartT=performance.now();
-  exp4PirSmoothed=null;
+  exp4PirSmoothed=null;exp4IrisPxSm=null;exp4PupilPxSm=null;
   if(!faceLoopId) startFaceLoop();
   showPhase('ph-experiment4');
   runExp4Phase(0);
@@ -1355,15 +1350,23 @@ function runExp4Phase(idx){
   exp4SampleId=setInterval(()=>{
     const res=estimatePupilPIR();if(!res)return;
     exp4PirSmoothed=exp4PirSmoothed===null?res.pir:0.75*exp4PirSmoothed+0.25*res.pir;
+    exp4IrisPxSm=exp4IrisPxSm===null?res.irisPx:0.75*exp4IrisPxSm+0.25*res.irisPx;
+    exp4PupilPxSm=exp4PupilPxSm===null?res.pupilPx:0.75*exp4PupilPxSm+0.25*res.pupilPx;
     const t=(performance.now()-exp4StartT)/1000;
-    exp4PhaseData[idx].samples.push({t,pir:+exp4PirSmoothed.toFixed(4)});
+    const irisMm=IRIS_REAL_MM;
+    const pupilMm=+(exp4PupilPxSm/exp4IrisPxSm*IRIS_REAL_MM).toFixed(2);
+    exp4PhaseData[idx].samples.push({t,pir:+exp4PirSmoothed.toFixed(4),irisMm,pupilMm});
     document.getElementById('exp4-pir').textContent=exp4PirSmoothed.toFixed(3);
+    document.getElementById('exp4-mm').textContent=`Iris: ${irisMm}mm · Pupil: ${pupilMm.toFixed(1)}mm`;
   },100);
   setTimeout(()=>{
     clearInterval(exp4SampleId);clearInterval(exp4TaskId);
     exp4PhaseData[idx].endT=(performance.now()-exp4StartT)/1000;
     const pirs=exp4PhaseData[idx].samples.map(s=>s.pir);
+    const pupilMms=exp4PhaseData[idx].samples.map(s=>s.pupilMm);
     exp4PhaseData[idx].mean=pirs.length?+(avg(pirs)).toFixed(4):0;
+    exp4PhaseData[idx].meanIrisMm=IRIS_REAL_MM;
+    exp4PhaseData[idx].meanMm=pupilMms.length?+(avg(pupilMms)).toFixed(2):0;
     runExp4Phase(idx+1);
   },ph.dur);
 }
@@ -1381,7 +1384,7 @@ function startExperiment5(){
   exp5PhaseIdx=0;
   exp5PhaseData=EXP5_PHASES.map(p=>({...p,startT:0,endT:0,samples:[],mean:0}));
   exp5StartT=performance.now();
-  exp5PirSmoothed=null;
+  exp5PirSmoothed=null;exp5IrisPxSm=null;exp5PupilPxSm=null;
   if(!faceLoopId) startFaceLoop();
   showPhase('ph-experiment5');
   runExp5Phase(0);
@@ -1412,15 +1415,23 @@ function runExp5Phase(idx){
   exp5SampleId=setInterval(()=>{
     const res=estimatePupilPIR();if(!res)return;
     exp5PirSmoothed=exp5PirSmoothed===null?res.pir:0.75*exp5PirSmoothed+0.25*res.pir;
+    exp5IrisPxSm=exp5IrisPxSm===null?res.irisPx:0.75*exp5IrisPxSm+0.25*res.irisPx;
+    exp5PupilPxSm=exp5PupilPxSm===null?res.pupilPx:0.75*exp5PupilPxSm+0.25*res.pupilPx;
     const t=(performance.now()-exp5StartT)/1000;
-    exp5PhaseData[idx].samples.push({t,pir:+exp5PirSmoothed.toFixed(4)});
+    const irisMm=IRIS_REAL_MM;
+    const pupilMm=+(exp5PupilPxSm/exp5IrisPxSm*IRIS_REAL_MM).toFixed(2);
+    exp5PhaseData[idx].samples.push({t,pir:+exp5PirSmoothed.toFixed(4),irisMm,pupilMm});
     document.getElementById('exp5-pir').textContent=exp5PirSmoothed.toFixed(3);
+    document.getElementById('exp5-mm').textContent=`Iris: ${irisMm}mm · Pupil: ${pupilMm.toFixed(1)}mm`;
   },100);
   setTimeout(()=>{
     clearInterval(exp5SampleId);
     exp5PhaseData[idx].endT=(performance.now()-exp5StartT)/1000;
     const pirs=exp5PhaseData[idx].samples.map(s=>s.pir);
+    const pupilMms=exp5PhaseData[idx].samples.map(s=>s.pupilMm);
     exp5PhaseData[idx].mean=pirs.length?+(avg(pirs)).toFixed(4):0;
+    exp5PhaseData[idx].meanIrisMm=IRIS_REAL_MM;
+    exp5PhaseData[idx].meanMm=pupilMms.length?+(avg(pupilMms)).toFixed(2):0;
     runExp5Phase(idx+1);
   },ph.dur);
 }
@@ -1449,16 +1460,21 @@ function renderResults(runIdx){
   else if(run.experimentType===5) renderResultsExp5(run,timeStr);
 }
 
-function buildSummaryCards(run,metricFn,unitFn,labelFn,colorFn){
+function buildSummaryCards(run,metricFn,unitFn,labelFn,colorFn,secMetricFn,secUnit,stdFn,secSuffix){
   const cards=document.getElementById('method-summary-cards');cards.innerHTML='';
   METHODS.forEach(m=>{
     const mr=run.results[m];
     const val=mr?metricFn(mr):'–';
     const color=mr&&colorFn?colorFn(mr):'#e6edf3';
+    const stdVal=stdFn&&mr?stdFn(mr):null;
+    const secVal=secMetricFn&&mr?secMetricFn(mr):null;
+    const secLine=secSuffix!==undefined?secSuffix:' of screen diagonal';
     const card=document.createElement('div');
     card.className='ms-card '+METHOD_CSS[m];
     card.innerHTML=`<h4>${METHOD_LABELS[m]}</h4>
-      <div class="ms-big" style="color:${color}">${val}<small style="font-size:1rem;color:#8b949e"> ${unitFn?unitFn(mr):''}</small></div>
+      <div class="ms-big" style="color:${color}">${val}${stdVal!==null?`<span style="color:#8b949e;font-size:1.1rem"> ± ${stdVal}</span>`:''}
+        <small style="font-size:1rem;color:#8b949e"> ${unitFn?unitFn(mr):''}</small></div>
+      ${secVal!==null?`<div style="color:#8b949e;font-size:.85rem;margin-top:2px">${secVal}${secUnit||''}${secLine}</div>`:''}
       <div class="ms-label">${labelFn}</div>`;
     cards.appendChild(card);
   });
@@ -1488,20 +1504,23 @@ function renderResultsExp1(run,timeStr){
   _lineReplayStops.forEach(fn=>fn());_lineReplayStops=[];
   document.getElementById('sec-table').style.display='';
   document.getElementById('res-title').textContent='Exp 1 — Fixation Accuracy';
-  document.getElementById('res-subtitle').textContent=timeStr+'   |   Cal: '+run.wgClicksPerDot+' clicks/dot';
+  document.getElementById('res-subtitle').textContent=timeStr+'   |   Cal: '+run.wgClicksPerDot+' clicks/dot   |   Screen: '+run.screenW+'×'+run.screenH+' (diag '+run.screenDiag+'px)';
   buildSummaryCards(run,mr=>mr.overallMean,()=>'px','Overall Mean Error',
-    mr=>mr.overallMean<80?'#3fb950':mr.overallMean<160?'#f0c000':'#f85149');
+    mr=>mr.overallMean<80?'#3fb950':mr.overallMean<160?'#f0c000':'#f85149',
+    mr=>mr.overallPct,'%',mr=>mr.overallStd);
 
-  document.getElementById('sec-chart-title').textContent='Mean Gaze Error per Dot — All 3 Methods';
+  document.getElementById('sec-chart-title').textContent='Mean Gaze Error per Dot — WebGazer';
   const dotLabels=CAL_POSITIONS_PCT.map((_,i)=>'Dot '+(i+1)).concat(['Overall']);
   const datasetsData=METHODS.map(m=>{const mr=run.results[m];return mr?(mr.dotResults.map(d=>d.mean).concat([mr.overallMean])):Array(10).fill(0);});
   buildGroupedChart(dotLabels,datasetsData,'Mean Error (px)');
 
-  document.getElementById('sec-table-title').textContent='Per-Dot Results — All 3 Methods';
+  document.getElementById('sec-table-title').textContent='Per-Dot Results — WebGazer';
   const thead=document.getElementById('results-thead');
   thead.innerHTML='<th>Dot</th><th>Position</th>'+
-    METHODS.map(m=>`<th style="color:${METHOD_COLORS[m]}">${METHOD_LABELS[m]} (px)</th>`).join('')+
-    METHODS.map(m=>`<th style="color:${METHOD_COLORS[m]};opacity:.6">N</th>`).join('');
+    METHODS.map(m=>`<th style="color:${METHOD_COLORS[m]}">${METHOD_LABELS[m]} mean (px)</th>`).join('')+
+    METHODS.map(m=>`<th style="color:${METHOD_COLORS[m]};opacity:.8">± std (px)</th>`).join('')+
+    METHODS.map(m=>`<th style="color:${METHOD_COLORS[m]};opacity:.75">% diag</th>`).join('')+
+    METHODS.map(m=>`<th style="color:${METHOD_COLORS[m]};opacity:.5">N</th>`).join('');
   const tbody=document.getElementById('results-tbody');tbody.innerHTML='';
   for(let i=0;i<9;i++){
     const tr=document.createElement('tr');
@@ -1513,18 +1532,22 @@ function renderResultsExp1(run,timeStr){
       const c=dr?(dr.mean<80?'#3fb950':dr.mean<160?'#f0c000':'#f85149'):'#8b949e';
       cells+=`<td style="color:${c};font-weight:600">${dr?dr.mean:'–'}</td>`;
     });
+    METHODS.forEach(m=>{const dr=run.results[m]?.dotResults[i];cells+=`<td style="color:#8b949e">${dr?dr.std:'–'}</td>`;});
+    METHODS.forEach(m=>{const dr=run.results[m]?.dotResults[i];cells+=`<td style="color:#8b949e">${dr?dr.pctErr+'%':'–'}</td>`;});
     METHODS.forEach(m=>{const dr=run.results[m]?.dotResults[i];cells+=`<td style="color:#8b949e">${dr?dr.samples.length:'–'}</td>`;});
     tr.innerHTML=cells;tbody.appendChild(tr);
   }
   const tr=document.createElement('tr');tr.className='total';
-  let tcells='<td colspan="2">Overall Average</td>';
+  let tcells='<td colspan="2">Overall</td>';
   METHODS.forEach(m=>{tcells+=`<td>${run.results[m]?.overallMean||'–'}</td>`;});
+  METHODS.forEach(m=>{tcells+=`<td>${run.results[m]?.overallStd!=null?run.results[m].overallStd:'–'}</td>`;});
+  METHODS.forEach(m=>{tcells+=`<td>${run.results[m]?.overallPct!=null?run.results[m].overallPct+'%':'–'}</td>`;});
   METHODS.forEach(m=>{const mr=run.results[m];tcells+=`<td>${mr?mr.dotResults.reduce((s,d)=>s+d.samples.length,0):'–'}</td>`;});
   tr.innerHTML=tcells;tbody.appendChild(tr);
 
   // Heatmap grid
   document.getElementById('sec-heatmaps').style.display='block';
-  document.getElementById('sec-heatmaps-title').textContent='Heatmaps — Dot × Method';
+  document.getElementById('sec-heatmaps-title').textContent='Heatmaps — Dot × Method (2 columns)';
   buildHeatmapGrid(9,(i)=>'Dot '+(i+1),(i,m)=>{
     const dr=run.results[m]?.dotResults[i];
     return dr?{url:dr.heatmapUrl,caption:''}:null;
@@ -1672,13 +1695,14 @@ function renderResultsExp2(run,timeStr){
   _lineReplayStops.forEach(fn=>fn());_lineReplayStops=[];
 
   document.getElementById('res-title').textContent='Exp 2 — Reading Task';
-  document.getElementById('res-subtitle').textContent=timeStr+'   |   '+EXP2_WORDS.length+' words';
+  document.getElementById('res-subtitle').textContent=timeStr+'   |   '+EXP2_WORDS.length+' words   |   Screen: '+run.screenW+'×'+run.screenH+' (diag '+run.screenDiag+'px)';
   buildSummaryCards(run,mr=>mr.overallMean,()=>'px','Overall Mean Error',
-    mr=>mr.overallMean<80?'#3fb950':mr.overallMean<160?'#f0c000':'#f85149');
+    mr=>mr.overallMean<80?'#3fb950':mr.overallMean<160?'#f0c000':'#f85149',
+    mr=>mr.overallPct,'%',mr=>mr.overallStd);
 
   // Bar chart: overall mean error per word (first 30)
   const maxWords=Math.min(30,EXP2_WORDS.length);
-  document.getElementById('sec-chart-title').textContent='Mean Gaze Error per Word — All 3 Methods (first '+maxWords+' words)';
+  document.getElementById('sec-chart-title').textContent='Mean Gaze Error per Word — WebGazer (first '+maxWords+' words)';
   const wordLabels=EXP2_WORDS.slice(0,maxWords).map(w=>'"'+w+'"').concat(['Overall']);
   const datasetsData=METHODS.map(m=>{const mr=run.results[m];return mr?(mr.wordResults.slice(0,maxWords).map(w=>w.mean).concat([mr.overallMean])):Array(maxWords+1).fill(0);});
   buildGroupedChart(wordLabels,datasetsData,'Mean Error (px)');
@@ -1709,19 +1733,22 @@ function renderResultsExp3(run,timeStr){
   _lineReplayStops.forEach(fn=>fn());_lineReplayStops=[];
   document.getElementById('sec-table').style.display='';
   document.getElementById('res-title').textContent='Exp 3 — Off-Screen Robustness';
-  const summaries=METHODS.map(m=>{const mr=run.results[m];return mr?METHOD_LABELS[m]+': '+mr.leakageRate+'%':'–';}).join('  |  ');
-  document.getElementById('res-subtitle').textContent=timeStr+'   |   '+summaries+' leakage';
-  buildSummaryCards(run,mr=>mr.leakageRate,()=>'%','Leakage Rate (lower = better)',
-    mr=>mr.leakageRate<20?'#3fb950':mr.leakageRate<50?'#f0c000':'#f85149');
+  const summaries=METHODS.map(m=>{const mr=run.results[m];return mr?METHOD_LABELS[m]+': '+mr.accuracyRate+'%':'–';}).join('  |  ');
+  document.getElementById('res-subtitle').textContent=timeStr+'   |   '+summaries+' accuracy';
+  buildSummaryCards(run,mr=>mr.accuracyRate,()=>'%','Off-Screen Accuracy (higher = better)',
+    mr=>mr.accuracyRate>80?'#3fb950':mr.accuracyRate>50?'#f0c000':'#f85149',
+    mr=>mr.leakageRate,'%',null,' leakage');
 
-  document.getElementById('sec-chart-title').textContent='On-Screen Sample Count per Direction — All 3 Methods (lower = better)';
-  const dirLabels=EXP3_DIRECTIONS.map(d=>d.arrow+' '+d.label).concat(['Total']);
-  const datasetsData=METHODS.map(m=>{const mr=run.results[m];return mr?(mr.dirResults.map(dr=>dr.onScreen).concat([mr.totalOnScreen])):[0,0,0,0,0];});
-  buildGroupedChart(dirLabels,datasetsData,'On-screen sample count');
+  document.getElementById('sec-chart-title').textContent='Off-Screen Accuracy per Direction — WebGazer (higher = better)';
+  const dirLabels=EXP3_DIRECTIONS.map(d=>d.arrow+' '+d.label).concat(['Overall']);
+  const datasetsData=METHODS.map(m=>{const mr=run.results[m];return mr?(mr.dirResults.map(dr=>dr.acc).concat([mr.accuracyRate])):[0,0,0,0,0];});
+  buildGroupedChart(dirLabels,datasetsData,'Accuracy (%)');
 
-  document.getElementById('sec-table-title').textContent='Per-Direction Leakage — All 3 Methods';
+  document.getElementById('sec-table-title').textContent='Per-Direction Results — WebGazer';
   const thead=document.getElementById('results-thead');
-  thead.innerHTML='<th>Direction</th>'+METHODS.map(m=>`<th style="color:${METHOD_COLORS[m]}">${METHOD_LABELS[m]}<br><small>On/Total (%)</small></th>`).join('');
+  thead.innerHTML='<th>Direction</th>'+
+    METHODS.map(m=>`<th style="color:${METHOD_COLORS[m]}">${METHOD_LABELS[m]}<br><small>Accuracy</small></th>`).join('')+
+    METHODS.map(m=>`<th style="color:${METHOD_COLORS[m]};opacity:.7"><small>Leakage (on/total)</small></th>`).join('');
   const tbody=document.getElementById('results-tbody');tbody.innerHTML='';
   EXP3_DIRECTIONS.forEach((dir,i)=>{
     const tr=document.createElement('tr');
@@ -1729,15 +1756,22 @@ function renderResultsExp3(run,timeStr){
     METHODS.forEach(m=>{
       const dr=run.results[m]?.dirResults[i];
       if(dr){
-        const pct=dr.total?+(dr.onScreen/dr.total*100).toFixed(1):0;
-        const c=pct<20?'#3fb950':pct<50?'#f0c000':'#f85149';
-        cells+=`<td><span style="color:${c};font-weight:600">${dr.onScreen}/${dr.total}</span> <span style="color:#8b949e">(${pct}%)</span></td>`;
+        const c=dr.acc>80?'#3fb950':dr.acc>50?'#f0c000':'#f85149';
+        cells+=`<td style="color:${c};font-weight:600">${dr.acc}%</td>`;
+      } else cells+='<td style="color:#8b949e">–</td>';
+    });
+    METHODS.forEach(m=>{
+      const dr=run.results[m]?.dirResults[i];
+      if(dr){
+        const leakPct=dr.total?+(dr.onScreen/dr.total*100).toFixed(1):0;
+        cells+=`<td style="color:#8b949e">${dr.onScreen}/${dr.total} (${leakPct}%)</td>`;
       } else cells+='<td style="color:#8b949e">–</td>';
     });
     tr.innerHTML=cells;tbody.appendChild(tr);
   });
   const tr=document.createElement('tr');tr.className='total';
-  let tcells='<td>Total</td>';
+  let tcells='<td>Overall</td>';
+  METHODS.forEach(m=>{const mr=run.results[m];tcells+=mr?`<td>${mr.accuracyRate}%</td>`:'<td>–</td>';});
   METHODS.forEach(m=>{const mr=run.results[m];tcells+=mr?`<td>${mr.totalOnScreen}/${mr.totalSamples} (${mr.leakageRate}%)</td>`:'<td>–</td>';});
   tr.innerHTML=tcells;tbody.appendChild(tr);
 
@@ -1746,8 +1780,7 @@ function renderResultsExp3(run,timeStr){
   buildHeatmapGrid(EXP3_DIRECTIONS.length,(i)=>EXP3_DIRECTIONS[i].arrow+' '+EXP3_DIRECTIONS[i].label,(i,m)=>{
     const dr=run.results[m]?.dirResults[i];
     if(!dr) return null;
-    const pct=dr.total?+(dr.onScreen/dr.total*100).toFixed(1):0;
-    return{url:dr.heatmapUrl,caption:`${dr.onScreen}/${dr.total} (${pct}%)`};
+    return{url:dr.heatmapUrl,caption:`${dr.acc}% acc (${dr.onScreen}/${dr.total} on-screen)`};
   });
 }
 
@@ -1773,14 +1806,26 @@ function buildPirChart(phases){
     }
   };
   const allSamples=phases.flatMap(ph=>ph.samples);
-  const dataset=allSamples.map(s=>({x:s.t,y:s.pir}));
+  const tStart=allSamples.length?allSamples[0].t:0;
+  const tEnd=allSamples.length?allSamples[allSamples.length-1].t:1;
+  const datasetPir=allSamples.map(s=>({x:s.t,y:s.pir}));
+  const datasetPupilMm=allSamples.map(s=>({x:s.t,y:s.pupilMm!=null?s.pupilMm:+(s.pir*IRIS_REAL_MM).toFixed(2)}));
+  const datasetIrisMm=[{x:tStart,y:IRIS_REAL_MM},{x:tEnd,y:IRIS_REAL_MM}];
   const canvas=document.getElementById('comparison-chart');
   if(compChartInst){compChartInst.destroy();compChartInst=null;}
   compChartInst=new Chart(canvas,{
     type:'line',
-    data:{datasets:[{label:'PIR (smoothed)',data:dataset,
-      borderColor:'#58a6ff',backgroundColor:'rgba(88,166,255,0.08)',
-      borderWidth:2,pointRadius:0,tension:0.3,fill:true}]},
+    data:{datasets:[
+      {label:'PIR (smoothed)',data:datasetPir,yAxisID:'y',
+        borderColor:'#58a6ff',backgroundColor:'rgba(88,166,255,0.08)',
+        borderWidth:2,pointRadius:0,tension:0.3,fill:true},
+      {label:'Pupil (mm)',data:datasetPupilMm,yAxisID:'y1',
+        borderColor:'#f0c000',backgroundColor:'transparent',
+        borderWidth:1.5,pointRadius:0,tension:0.3},
+      {label:'Iris (mm, reference)',data:datasetIrisMm,yAxisID:'y1',
+        borderColor:'rgba(120,200,120,0.6)',backgroundColor:'transparent',
+        borderWidth:1,pointRadius:0,tension:0,borderDash:[6,4]}
+    ]},
     options:{
       responsive:true,maintainAspectRatio:false,
       plugins:{legend:{labels:{color:'#e6edf3'}}},
@@ -1788,7 +1833,10 @@ function buildPirChart(phases){
         x:{type:'linear',title:{display:true,text:'Time (s)',color:'#8b949e'},
            ticks:{color:'#8b949e'},grid:{color:'rgba(48,54,61,0.5)'}},
         y:{min:0,max:0.85,title:{display:true,text:'PIR (pupil / iris)',color:'#8b949e'},
-           ticks:{color:'#8b949e'},grid:{color:'rgba(48,54,61,0.5)'}}
+           ticks:{color:'#8b949e'},grid:{color:'rgba(48,54,61,0.5)'}},
+        y1:{type:'linear',position:'right',min:0,max:15,
+            title:{display:true,text:'Diameter (mm)',color:'#8b949e'},
+            ticks:{color:'#8b949e'},grid:{drawOnChartArea:false}}
       }
     },
     plugins:[phaseBgPlugin]
@@ -1801,9 +1849,13 @@ function buildPhaseSummaryCards(phases){
     const el=document.createElement('div');
     el.className='method-card';
     const c=ph.name==='hard'?'#f85149':ph.name==='easy'?'#3fb950':ph.name==='bright'?'#f0c000':ph.name==='dark'?'#8b949e':'#58a6ff';
+    const pupilMmVal=ph.meanMm!=null?ph.meanMm:(ph.mean?+(ph.mean*IRIS_REAL_MM).toFixed(2):null);
+    const irisMmVal=ph.meanIrisMm!=null?ph.meanIrisMm:IRIS_REAL_MM;
     el.innerHTML=`<div class="mc-label" style="color:${c}">${ph.label}</div>
       <div class="mc-value">${ph.mean?ph.mean.toFixed(3):'–'}</div>
-      <div class="mc-unit">mean PIR</div>`;
+      <div class="mc-unit">mean PIR</div>
+      ${pupilMmVal!=null?`<div class="mc-unit" style="color:#f0c000;margin-top:4px">Pupil: ${pupilMmVal.toFixed?pupilMmVal.toFixed(2):pupilMmVal} mm</div>`:''}
+      <div class="mc-unit" style="color:rgba(120,200,120,0.8);margin-top:2px">Iris: ${irisMmVal} mm</div>`;
     cards.appendChild(el);
   });
 }
@@ -1824,17 +1876,19 @@ function renderResultsExp4(run,timeStr){
   const hard=run.phases.find(p=>p.name==='hard');
   const base=run.phases.find(p=>p.name==='baseline');
   const rows=[
-    {phase:'Baseline',       mean:base?.mean, expected:'–',       color:'#58a6ff'},
-    {phase:'Easy Task',      mean:easy?.mean, expected:'↓ or baseline', color:'#3fb950'},
-    {phase:'Hard Task',      mean:hard?.mean, expected:'↑ dilation',    color:'#f85149'},
+    {phase:'Baseline',  mean:base?.mean, meanMm:base?.meanMm, meanIrisMm:base?.meanIrisMm, expected:'–',             color:'#58a6ff'},
+    {phase:'Easy Task', mean:easy?.mean, meanMm:easy?.meanMm, meanIrisMm:easy?.meanIrisMm, expected:'↓ or baseline', color:'#3fb950'},
+    {phase:'Hard Task', mean:hard?.mean, meanMm:hard?.meanMm, meanIrisMm:hard?.meanIrisMm, expected:'↑ dilation',    color:'#f85149'},
   ];
   const detected=hard&&easy?hard.mean>easy.mean?'Detected — hard task PIR > easy task PIR':'Not detected — no significant difference':'–';
-  let tbl=`<table class="tbl" style="max-width:600px"><thead><tr>
-    <th>Phase</th><th>Mean PIR</th><th>Expected</th><th>Δ vs Baseline</th></tr></thead><tbody>`;
+  let tbl=`<table class="tbl" style="max-width:720px"><thead><tr>
+    <th>Phase</th><th>Mean PIR</th><th>Pupil (mm)</th><th>Iris (mm)</th><th>Expected</th><th>Δ PIR vs Baseline</th></tr></thead><tbody>`;
   rows.forEach(r=>{
     const delta=base&&r.mean?+(r.mean-base.mean).toFixed(4):0;
     const dStr=r.phase==='Baseline'?'–':(delta>0?'+':'')+delta;
-    tbl+=`<tr><td style="color:${r.color}">${r.phase}</td><td style="font-weight:600">${r.mean?r.mean.toFixed(3):'–'}</td><td style="color:#8b949e">${r.expected}</td><td style="color:${delta>0?'#3fb950':delta<0?'#f85149':'#8b949e'}">${dStr}</td></tr>`;
+    const pupilMmVal=r.meanMm!=null?r.meanMm:(r.mean?+(r.mean*IRIS_REAL_MM).toFixed(2):null);
+    const irisMmVal=r.meanIrisMm!=null?r.meanIrisMm:IRIS_REAL_MM;
+    tbl+=`<tr><td style="color:${r.color}">${r.phase}</td><td style="font-weight:600">${r.mean?r.mean.toFixed(3):'–'}</td><td style="color:#f0c000;font-weight:600">${pupilMmVal!=null?pupilMmVal+' mm':'–'}</td><td style="color:rgba(120,200,120,0.9)">${irisMmVal} mm</td><td style="color:#8b949e">${r.expected}</td><td style="color:${delta>0?'#3fb950':delta<0?'#f85149':'#8b949e'}">${dStr}</td></tr>`;
   });
   tbl+=`</tbody></table>
     <p style="margin-top:14px;font-size:.82rem;color:${hard&&easy&&hard.mean>easy.mean?'#3fb950':'#f85149'}">${detected}</p>
@@ -1858,17 +1912,19 @@ function renderResultsExp5(run,timeStr){
   const bright=run.phases.find(p=>p.name==='bright');
   const dark=run.phases.find(p=>p.name==='dark');
   const rows=[
-    {phase:'Baseline (grey)', mean:base?.mean,   expected:'Reference'},
-    {phase:'Bright (white)',  mean:bright?.mean, expected:'↓ constriction', ok:bright&&base?bright.mean<base.mean:null},
-    {phase:'Dark (black)',    mean:dark?.mean,   expected:'↑ dilation',     ok:dark&&base?dark.mean>base.mean:null},
+    {phase:'Baseline (grey)', mean:base?.mean,   meanMm:base?.meanMm,   meanIrisMm:base?.meanIrisMm,   expected:'Reference'},
+    {phase:'Bright (white)',  mean:bright?.mean, meanMm:bright?.meanMm, meanIrisMm:bright?.meanIrisMm, expected:'↓ constriction', ok:bright&&base?bright.mean<base.mean:null},
+    {phase:'Dark (black)',    mean:dark?.mean,   meanMm:dark?.meanMm,   meanIrisMm:dark?.meanIrisMm,   expected:'↑ dilation',     ok:dark&&base?dark.mean>base.mean:null},
   ];
-  let tbl=`<table class="tbl" style="max-width:640px"><thead><tr>
-    <th>Phase</th><th>Mean PIR</th><th>Expected</th><th>Δ vs Baseline</th><th>Detected?</th></tr></thead><tbody>`;
+  let tbl=`<table class="tbl" style="max-width:800px"><thead><tr>
+    <th>Phase</th><th>Mean PIR</th><th>Pupil (mm)</th><th>Iris (mm)</th><th>Expected</th><th>Δ PIR vs Baseline</th><th>Detected?</th></tr></thead><tbody>`;
   rows.forEach(r=>{
     const delta=base&&r.mean?+(r.mean-base.mean).toFixed(4):0;
     const dStr=r.phase.includes('Baseline')?'–':(delta>0?'+':'')+delta;
     const det=r.ok===null?'–':r.ok?'<span style="color:#3fb950">Yes</span>':'<span style="color:#f85149">No</span>';
-    tbl+=`<tr><td>${r.phase}</td><td style="font-weight:600">${r.mean?r.mean.toFixed(3):'–'}</td><td style="color:#8b949e">${r.expected}</td><td style="color:${delta>0?'#3fb950':delta<0?'#f0c000':'#8b949e'}">${dStr}</td><td>${det}</td></tr>`;
+    const pupilMmVal=r.meanMm!=null?r.meanMm:(r.mean?+(r.mean*IRIS_REAL_MM).toFixed(2):null);
+    const irisMmVal=r.meanIrisMm!=null?r.meanIrisMm:IRIS_REAL_MM;
+    tbl+=`<tr><td>${r.phase}</td><td style="font-weight:600">${r.mean?r.mean.toFixed(3):'–'}</td><td style="color:#f0c000;font-weight:600">${pupilMmVal!=null?pupilMmVal+' mm':'–'}</td><td style="color:rgba(120,200,120,0.9)">${irisMmVal} mm</td><td style="color:#8b949e">${r.expected}</td><td style="color:${delta>0?'#3fb950':delta<0?'#f0c000':'#8b949e'}">${dStr}</td><td>${det}</td></tr>`;
   });
   tbl+=`</tbody></table>
     <p style="margin-top:10px;font-size:.75rem;color:#8b949e">Note: webcam auto-exposure adapts to screen brightness and may confound absolute PIR. Relative changes (Δ) are more meaningful than absolute PIR values.</p>`;
@@ -1877,13 +1933,14 @@ function renderResultsExp5(run,timeStr){
 
 function buildHeatmapGrid(nRows,rowLabelFn,cellFn){
   const hc=document.getElementById('heatmaps-container');hc.innerHTML='';
-  const hdr=document.createElement('div');hdr.className='hm-header-row cols3';
+  const colClass='cols'+METHODS.length;
+  const hdr=document.createElement('div');hdr.className='hm-header-row '+colClass;
   hdr.innerHTML=METHODS.map(m=>`<div style="font-size:.8rem;font-weight:700;color:${METHOD_COLORS[m]};text-align:center;padding:4px">${METHOD_LABELS[m]}</div>`).join('');
   hc.appendChild(hdr);
   for(let i=0;i<nRows;i++){
     const rowLabel=document.createElement('div');rowLabel.className='hm-row-label';rowLabel.textContent=rowLabelFn(i);
     hc.appendChild(rowLabel);
-    const row=document.createElement('div');row.className='hm-grid cols3';
+    const row=document.createElement('div');row.className='hm-grid '+colClass;
     METHODS.forEach(m=>{
       const info=cellFn(i,m);
       const cell=document.createElement('div');cell.className='hm-cell';
@@ -1922,7 +1979,7 @@ function updateRunsList(){
     } else {
       scores=METHODS.map(m=>{
         const mr=run.results[m];if(!mr) return '';
-        const val=run.experimentType===3?mr.leakageRate+'%':mr.overallMean+'px';
+        const val=run.experimentType===3?mr.accuracyRate+'% acc':mr.overallMean+'px';
         return`<span class="ri-score" style="color:${METHOD_COLORS[m]}">${val}</span>`;
       }).join('<span style="color:#30363d;margin:0 2px">|</span>');
     }
@@ -1970,8 +2027,8 @@ function saveResults(){
       METHODS.forEach(m=>{
         const mr=run.results[m];if(!mr){base.results[m]=null;return;}
         if(run.experimentType===3){
-          base.results[m]={leakageRate:mr.leakageRate,totalOnScreen:mr.totalOnScreen,totalSamples:mr.totalSamples,
-            directions:mr.dirResults.map(dr=>({direction:dr.dirLabel,arrow:dr.dirArrow,onScreen:dr.onScreen,total:dr.total,
+          base.results[m]={accuracyRate:mr.accuracyRate,leakageRate:mr.leakageRate,totalOnScreen:mr.totalOnScreen,totalSamples:mr.totalSamples,
+            directions:mr.dirResults.map(dr=>({direction:dr.dirLabel,arrow:dr.dirArrow,accuracy:dr.acc,onScreen:dr.onScreen,total:dr.total,
               leakagePct:dr.total?+(dr.onScreen/dr.total*100).toFixed(1):0,timeSeries:dr.samples}))};
         } else if(run.experimentType===2){
           base.results[m]={overallMean:mr.overallMean,words:mr.wordResults.map(w=>({idx:w.wordIdx+1,word:w.word,
@@ -1991,23 +2048,25 @@ function saveResults(){
   if(latestRun){
     let csv='';
     if(latestRun.experimentType===4||latestRun.experimentType===5){
-      csv='Phase,Duration_s,MeanPIR,Samples\n';
+      csv='Phase,Duration_s,MeanPIR,MeanPupilMm,MeanIrisMm,Samples\n';
       latestRun.phases.forEach(ph=>{
-        csv+=`"${ph.label}",${ph.dur/1000},${ph.mean},${ph.samples.length}\n`;
+        const pupilMmVal=ph.meanMm!=null?ph.meanMm:+(ph.mean*IRIS_REAL_MM).toFixed(2);
+        const irisMmVal=ph.meanIrisMm!=null?ph.meanIrisMm:IRIS_REAL_MM;
+        csv+=`"${ph.label}",${ph.dur/1000},${ph.mean},${pupilMmVal},${irisMmVal},${ph.samples.length}\n`;
       });
     } else if(latestRun.experimentType===3){
-      csv='Method,Direction,OnScreen,Total,LeakagePct\n';
+      csv='Method,Direction,AccuracyPct,OnScreen,Total,LeakagePct\n';
       METHODS.forEach(m=>{const mr=latestRun.results[m];if(!mr) return;
-        mr.dirResults.forEach(dr=>{const pct=dr.total?+(dr.onScreen/dr.total*100).toFixed(1):0;
-          csv+=`"${METHOD_LABELS[m]}","${dr.dirLabel}",${dr.onScreen},${dr.total},${pct}\n`;});});
+        mr.dirResults.forEach(dr=>{const leakPct=dr.total?+(dr.onScreen/dr.total*100).toFixed(1):0;
+          csv+=`"${METHOD_LABELS[m]}","${dr.dirLabel}",${dr.acc},${dr.onScreen},${dr.total},${leakPct}\n`;});});
     } else if(latestRun.experimentType===2){
-      csv='Method,WordIdx,Word,GroundTruthX,GroundTruthY,MeanError_px,MinError_px,MaxError_px,Samples\n';
+      csv='Method,WordIdx,Word,GroundTruthX,GroundTruthY,MeanError_px,StdError_px,MinError_px,MaxError_px,Samples\n';
       METHODS.forEach(m=>{const mr=latestRun.results[m];if(!mr) return;
-        mr.wordResults.forEach(w=>{csv+=`"${METHOD_LABELS[m]}",${w.wordIdx+1},"${w.word}",${w.gtX},${w.gtY},${w.mean},${w.min},${w.max},${w.samples.length}\n`;});});
+        mr.wordResults.forEach(w=>{csv+=`"${METHOD_LABELS[m]}",${w.wordIdx+1},"${w.word}",${w.gtX},${w.gtY},${w.mean},${w.std},${w.min},${w.max},${w.samples.length}\n`;});});
     } else {
-      csv='Method,Dot,PctX,PctY,GroundTruthX,GroundTruthY,MeanError_px,MinError_px,MaxError_px,Samples\n';
+      csv='Method,Dot,PctX,PctY,GroundTruthX,GroundTruthY,MeanError_px,StdError_px,MinError_px,MaxError_px,Samples\n';
       METHODS.forEach(m=>{const mr=latestRun.results[m];if(!mr) return;
-        mr.dotResults.forEach(dr=>{csv+=`"${METHOD_LABELS[m]}",${dr.dotIdx+1},${dr.pct[0]},${dr.pct[1]},${dr.gtX},${dr.gtY},${dr.mean},${dr.min},${dr.max},${dr.samples.length}\n`;});});
+        mr.dotResults.forEach(dr=>{csv+=`"${METHOD_LABELS[m]}",${dr.dotIdx+1},${dr.pct[0]},${dr.pct[1]},${dr.gtX},${dr.gtY},${dr.mean},${dr.std},${dr.min},${dr.max},${dr.samples.length}\n`;});});
     }
     const csvBlob=new Blob([csv],{type:'text/csv'});
     const csvUrl=URL.createObjectURL(csvBlob);
