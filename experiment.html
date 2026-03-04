@@ -360,7 +360,7 @@
      PHASE 4c – Experiment 4 (Cognitive Load)
 ══════════════════════════════════════════════════════════ -->
 <div id="ph-experiment4" class="phase">
-  <div id="exp4-phase-label">Baseline</div>
+  <div id="exp4-phase-label">Ready</div>
   <div id="exp4-task">+</div>
   <div id="exp4-timer">–</div>
   <div id="exp4-status">
@@ -377,7 +377,7 @@
     <div id="exp5-fixation" style="color:rgba(128,128,128,0.4)">+</div>
   </div>
   <div id="exp5-status" style="background:rgba(0,0,0,.6);border:1px solid rgba(255,255,255,.2);color:#fff">
-    <span id="exp5-phase" style="font-weight:700">Baseline</span>
+    <span id="exp5-phase" style="font-weight:700">Ready</span>
     &nbsp;·&nbsp;PIR <span id="exp5-pir" style="font-weight:700">–</span>
     &nbsp;·&nbsp;<span id="exp5-mm" style="font-weight:700">–</span> mm
     &nbsp;·&nbsp;<span id="exp5-timer">–</span>
@@ -459,10 +459,10 @@ const EXP3_SKIP_MS     = 500;
 
 /* Average human iris diameter used to convert PIR → pupil mm */
 const IRIS_REAL_MM = 11.7;
+const DEFAULT_IPD_MM = 63.0;
 
 /* ── Experiment 4 — Cognitive Load phases ────────────────── */
 const EXP4_PHASES=[
-  {name:'baseline',label:'Baseline',  task:'+',  dur:10000,color:'rgba(88,166,255,0.13)'},
   {name:'easy',    label:'Easy Task', task:null, dur:20000,color:'rgba(63,185,80,0.13)'},
   {name:'rest',    label:'Rest',      task:'+',  dur:8000, color:'rgba(88,166,255,0.13)'},
   {name:'hard',    label:'Hard Task', task:null, dur:20000,color:'rgba(248,81,73,0.13)'},
@@ -471,12 +471,17 @@ const EXP4_PHASES=[
 
 /* ── Experiment 5 — Luminance Response phases ────────────── */
 const EXP5_PHASES=[
-  {name:'baseline', label:'Baseline',  bg:'#7f7f7f',fixColor:'rgba(128,128,128,0.4)', dur:5000, color:'rgba(127,127,127,0.2)'},
   {name:'bright',   label:'Bright',    bg:'#ffffff',fixColor:'rgba(200,200,200,0.6)', dur:5000, color:'rgba(230,230,230,0.3)'},
   {name:'recover1', label:'Recovery',  bg:'#7f7f7f',fixColor:'rgba(128,128,128,0.4)', dur:5000, color:'rgba(127,127,127,0.2)'},
   {name:'dark',     label:'Dark',      bg:'#000000',fixColor:'rgba(60,60,60,0.5)',    dur:5000, color:'rgba(20,20,20,0.4)'},
   {name:'recover2', label:'Recovery',  bg:'#7f7f7f',fixColor:'rgba(128,128,128,0.4)', dur:5000, color:'rgba(127,127,127,0.2)'},
 ];
+
+// Literature-backed constants for Exp 4/5
+// SET (Javadi et al., 2015): threshold=30, min region=600 px (original setup)
+const SET_THRESHOLD = 30;
+const SET_MIN_REGION_BASE = 600;
+const SET_BASE_FRAME_AREA = 640 * 480;
 
 const EXP2_PARAGRAPH =
   'The Transformer architecture introduced by Vaswani et al in 2017 revolutionized ' +
@@ -497,6 +502,7 @@ let selectedExperiment = null;
 let isCalibrated       = false;
 let allRuns            = [];
 let latestRunIdx       = -1;
+let exp45IpdMm         = DEFAULT_IPD_MM;
 
 // Camera / MediaPipe
 let videoEl      = null;
@@ -558,9 +564,12 @@ let exp4StartT      = 0;
 let exp4SampleId    = null;
 let exp4TaskId      = null;
 let exp4TimerId     = null;
-let exp4PirSmoothed    = null;
 let exp4IrisPxSm       = null;
-let exp4PupilPxSm      = null;
+let exp4IpdPxSm        = null;
+let exp4PirSETSm       = null;
+let exp4PupilPxSETSm   = null;
+let exp4PirOtsuSm      = null;
+let exp4PupilPxOtsuSm  = null;
 
 // Experiment 5 state (luminance response)
 let exp5PhaseIdx    = 0;
@@ -568,9 +577,12 @@ let exp5PhaseData   = [];
 let exp5StartT      = 0;
 let exp5SampleId    = null;
 let exp5TimerId     = null;
-let exp5PirSmoothed    = null;
 let exp5IrisPxSm       = null;
-let exp5PupilPxSm      = null;
+let exp5IpdPxSm        = null;
+let exp5PirSETSm       = null;
+let exp5PupilPxSETSm   = null;
+let exp5PirOtsuSm      = null;
+let exp5PupilPxOtsuSm  = null;
 
 // Chart instances
 let compChartInst  = null;
@@ -874,24 +886,53 @@ function showReadyPhase(){
     html+=`<ul style="color:#8b949e;padding-left:18px;margin:0">
       <li><span style="color:#e6edf3">No gaze calibration needed</span> — uses pupil size only (MediaPipe)</li>
       <li>Total duration: <span style="color:#e6edf3">${totalSec} s</span> across ${EXP4_PHASES.length} phases</li>
-      <li><span style="color:#58a6ff">Baseline</span> → <span style="color:#3fb950">Easy counting</span> → <span style="color:#58a6ff">Rest</span> → <span style="color:#f85149">Hard serial‑7</span> → <span style="color:#58a6ff">Final rest</span></li>
+      <li><span style="color:#3fb950">Easy counting</span> → <span style="color:#58a6ff">Rest</span> → <span style="color:#f85149">Hard serial‑7</span> → <span style="color:#58a6ff">Final rest</span></li>
       <li>A fixation cross (+) is shown; <span style="color:#e6edf3">keep your gaze on it</span></li>
       <li>During task phases, a number is shown — follow the on-screen instructions</li>
-      <li>Metric: <span style="color:#e6edf3">PIR (Pupil–Iris Ratio)</span> — cognitive load causes pupil dilation</li>
-    </ul>`;
+      <li>Reporting metric: <span style="color:#e6edf3">SET PIR and Otsu PIR shown separately</span></li>
+      <li>References:
+        <a href="https://doi.org/10.3389/fneng.2015.00004" target="_blank" style="color:#58a6ff">SET (T=30, min area=600)</a>,
+        <a href="https://doi.org/10.1109/TSMC.1979.4310076" target="_blank" style="color:#58a6ff">Otsu thresholding</a>,
+        <a href="https://research.google/blog/mediapipe-iris-real-time-iris-tracking-depth-estimation/" target="_blank" style="color:#58a6ff">MediaPipe iris landmarks</a>
+      </li>
+    </ul>
+    <div style="margin-top:14px;display:flex;gap:20px;align-items:center;flex-wrap:wrap">
+      <label style="display:flex;align-items:center;gap:8px;color:#8b949e;font-size:.85rem">
+        Your IPD (mm):<input id="exp45-ipd-input" type="number" min="45" max="80" step="0.1" value="${exp45IpdMm.toFixed(1)}" style="${inStyle}"/>
+      </label>
+      <span style="color:#8b949e;font-size:.78rem">Default 63.0 mm. Used with MediaPipe eye-center distance to convert px → mm.</span>
+    </div>`;
   } else if(selectedExperiment===5){
     const totalSec5=EXP5_PHASES.reduce((s,p)=>s+p.dur/1000,0);
     html+=`<ul style="color:#8b949e;padding-left:18px;margin:0">
       <li><span style="color:#e6edf3">No gaze calibration needed</span> — uses pupil size only (MediaPipe)</li>
       <li>Total duration: <span style="color:#e6edf3">${totalSec5} s</span> across ${EXP5_PHASES.length} phases</li>
-      <li><span style="color:#58a6ff">Baseline</span> → <span style="color:#f0c000">Bright</span> → <span style="color:#58a6ff">Recovery</span> → <span style="color:#8b949e">Dark</span> → <span style="color:#58a6ff">Recovery</span></li>
+      <li><span style="color:#f0c000">Bright</span> → <span style="color:#58a6ff">Recovery</span> → <span style="color:#8b949e">Dark</span> → <span style="color:#58a6ff">Recovery</span></li>
       <li><span style="color:#e6edf3">Keep your eyes open</span> and look at the fixation cross</li>
       <li>Screen brightness changes — do <span style="color:#e6edf3">not</span> squint or look away</li>
-      <li>Metric: <span style="color:#e6edf3">PIR (Pupil–Iris Ratio)</span> — bright light constricts, darkness dilates</li>
-    </ul>`;
+      <li>Reporting metric: <span style="color:#e6edf3">SET PIR and Otsu PIR shown separately</span></li>
+      <li>References:
+        <a href="https://doi.org/10.3389/fneng.2015.00004" target="_blank" style="color:#58a6ff">SET (T=30, min area=600)</a>,
+        <a href="https://doi.org/10.1109/TSMC.1979.4310076" target="_blank" style="color:#58a6ff">Otsu thresholding</a>,
+        <a href="https://research.google/blog/mediapipe-iris-real-time-iris-tracking-depth-estimation/" target="_blank" style="color:#58a6ff">MediaPipe iris landmarks</a>
+      </li>
+    </ul>
+    <div style="margin-top:14px;display:flex;gap:20px;align-items:center;flex-wrap:wrap">
+      <label style="display:flex;align-items:center;gap:8px;color:#8b949e;font-size:.85rem">
+        Your IPD (mm):<input id="exp45-ipd-input" type="number" min="45" max="80" step="0.1" value="${exp45IpdMm.toFixed(1)}" style="${inStyle}"/>
+      </label>
+      <span style="color:#8b949e;font-size:.78rem">Default 63.0 mm. Used with MediaPipe eye-center distance to convert px → mm.</span>
+    </div>`;
   }
   document.getElementById('ready-instructions').innerHTML=html;
   showPhase('ph-ready');
+}
+
+function readExp45IpdMm(){
+  const el=document.getElementById('exp45-ipd-input');
+  const v=el?parseFloat(el.value):NaN;
+  if(!isFinite(v)||v<45||v>80) return DEFAULT_IPD_MM;
+  return v;
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -1246,72 +1287,185 @@ function getPupilCtx(){
   }
   return _pupilCtx;
 }
-function estimatePupilRadius(ctx,center,irisR,W,H){
+/* ── Extract iris crop pixel data once per eye ─────────────────────────────
+   Returns {data, w, h, lcx, lcy, r} or null.
+   Calling this once and passing to each method avoids 3× getImageData per eye. */
+function getEyeImageData(ctx,center,irisR,W,H){
   const cx=Math.round(center.x),cy=Math.round(center.y);
   const r=Math.max(2,Math.round(irisR));
   const x0=Math.max(0,cx-r),y0=Math.max(0,cy-r);
   const w=Math.min(2*r+1,W-x0),h=Math.min(2*r+1,H-y0);
-  if(w<4||h<4) return r*0.32;
-  try{
-    const data=ctx.getImageData(x0,y0,w,h).data;
-    const lcx=cx-x0,lcy=cy-y0;
-    // Sample iris rim (outer ~78% of radius) for iris brightness reference
-    let rimB=0,rimN=0;
-    for(let a=0;a<360;a+=20){
-      const rad=a*Math.PI/180;
-      const rx=Math.round(lcx+r*0.78*Math.cos(rad)),ry=Math.round(lcy+r*0.78*Math.sin(rad));
-      if(rx>=0&&rx<w&&ry>=0&&ry<h){const i=(ry*w+rx)*4;rimB+=(data[i]+data[i+1]+data[i+2])/3;rimN++;}
-    }
-    rimB=rimN>0?rimB/rimN:128;
-    // Center (pupil) brightness
-    const ci=(lcy*w+lcx)*4;
-    const cB=(data[ci]+data[ci+1]+data[ci+2])/3;
-    const thresh=cB+(rimB-cB)*0.40; // 40% between pupil darkness and iris brightness
-    // Radial scan outward from center — find first pixel above threshold
-    let totR=0,n=0;
-    for(let a=0;a<360;a+=15){
-      const rad=a*Math.PI/180;
-      for(let d=1;d<=r;d++){
-        const rx=Math.round(lcx+d*Math.cos(rad)),ry=Math.round(lcy+d*Math.sin(rad));
-        if(rx<0||rx>=w||ry<0||ry>=h){totR+=d-1;n++;break;}
-        const i=(ry*w+rx)*4;
-        const b=(data[i]+data[i+1]+data[i+2])/3;
-        if(b>=thresh){totR+=d;n++;break;}
-        if(d===r){totR+=r*0.85;n++;}
-      }
-    }
-    return n>0?totR/n:r*0.32;
-  }catch(_){return r*0.32;}
+  if(w<4||h<4) return null;
+  try{return{data:ctx.getImageData(x0,y0,w,h).data,w,h,lcx:cx-x0,lcy:cy-y0,r};}
+  catch(_){return null;}
 }
+
+/* ── Method 1: Custom Radial Scan ──────────────────────────────────────────
+   Empirical radial brightness scan adapted from Starburst (Li et al., 2005,
+   IEEE CVPR Workshops, doi:10.1109/CVPR.2005.531). Threshold set at 40%
+   between pupil-centre darkness and iris-rim brightness (ad-hoc, not from
+   a published source — compare with SET and Otsu for validation). */
+function pupilRadiusByScan(ed){
+  if(!ed) return ed?.r*0.32||2;
+  const{data,w,h,lcx,lcy,r}=ed;
+  let rimB=0,rimN=0;
+  for(let a=0;a<360;a+=20){
+    const rad=a*Math.PI/180;
+    const rx=Math.round(lcx+r*0.78*Math.cos(rad)),ry=Math.round(lcy+r*0.78*Math.sin(rad));
+    if(rx>=0&&rx<w&&ry>=0&&ry<h){const i=(ry*w+rx)*4;rimB+=(data[i]+data[i+1]+data[i+2])/3;rimN++;}
+  }
+  rimB=rimN>0?rimB/rimN:128;
+  const ci=(lcy*w+lcx)*4;
+  const cB=(data[ci]+data[ci+1]+data[ci+2])/3;
+  const thresh=cB+(rimB-cB)*0.40;
+  let totR=0,n=0;
+  for(let a=0;a<360;a+=15){
+    const rad=a*Math.PI/180;
+    for(let d=1;d<=r;d++){
+      const rx=Math.round(lcx+d*Math.cos(rad)),ry=Math.round(lcy+d*Math.sin(rad));
+      if(rx<0||rx>=w||ry<0||ry>=h){totR+=d-1;n++;break;}
+      const i=(ry*w+rx)*4;
+      const b=(data[i]+data[i+1]+data[i+2])/3;
+      if(b>=thresh){totR+=d;n++;break;}
+      if(d===r){totR+=r*0.85;n++;}
+    }
+  }
+  return n>0?totR/n:r*0.32;
+}
+
+/* ── Method 2: SET (Sinusoidal Eye-Tracker) ────────────────────────────────
+   Binary threshold T=30, min region 600px (on 640×480 full frame).
+   Reference: Javadi et al. (2015), "SET: a pupil detection method using
+   sinusoidal approximation", Frontiers in Neuroengineering,
+   doi:10.3389/fneng.2015.00004, PMID:25904858.
+   Applied here to the iris crop; min region scaled proportionally. */
+function pupilRadiusBySET(ed){
+  if(!ed) return ed?.r*0.32||2;
+  const{data,w,h,lcx,lcy,r}=ed;
+  const T=SET_THRESHOLD; // SET binary threshold (Javadi et al. 2015)
+  const minPx=Math.max(10,Math.round(SET_MIN_REGION_BASE*((w*h)/SET_BASE_FRAME_AREA)));
+  const ci=(lcy*w+lcx)*4;
+  const startB=(data[ci]+data[ci+1]+data[ci+2])/3;
+  if(startB>=T) return r*0.32; // centre not dark enough for SET threshold
+  const visited=new Uint8Array(w*h);
+  const queue=new Int32Array(w*h*2);
+  let head=0,tail=0;
+  visited[lcy*w+lcx]=1;queue[tail++]=lcx;queue[tail++]=lcy;
+  let count=0;
+  while(head<tail){
+    const px=queue[head++],py=queue[head++];count++;
+    for(let d=0;d<4;d++){
+      const nx=px+(d===0?-1:d===1?1:0),ny=py+(d===2?-1:d===3?1:0);
+      if(nx<0||nx>=w||ny<0||ny>=h) continue;
+      const ni=ny*w+nx;if(visited[ni]) continue;
+      const b=(data[ni*4]+data[ni*4+1]+data[ni*4+2])/3;
+      if(b<T){visited[ni]=1;queue[tail++]=nx;queue[tail++]=ny;}
+    }
+  }
+  if(count<minPx) return r*0.32;
+  return Math.sqrt(count/Math.PI);
+}
+
+/* ── Otsu threshold from pixel histogram ───────────────────────────────────
+   Otsu, N. (1979), "A threshold selection method from gray-level histograms",
+   IEEE Trans. Systems Man Cybernetics, 9(1):62-66, doi:10.1109/TSMC.1979.4310076. */
+function otsuThreshold(data,w,h){
+  const hist=new Float32Array(256);
+  const N=w*h;
+  for(let i=0;i<N;i++){hist[Math.round((data[i*4]+data[i*4+1]+data[i*4+2])/3)]++;}
+  for(let i=0;i<256;i++) hist[i]/=N;
+  const totalMean=hist.reduce((s,v,i)=>s+v*i,0);
+  let bestT=0,bestVar=0,w0=0,sum0=0;
+  for(let t=0;t<256;t++){
+    w0+=hist[t];sum0+=hist[t]*t;
+    const w1=1-w0;if(w0===0||w1===0) continue;
+    const bv=w0*w1*Math.pow(sum0/w0-(totalMean-sum0)/w1,2);
+    if(bv>bestVar){bestVar=bv;bestT=t;}
+  }
+  return bestT;
+}
+
+/* ── Method 3: Otsu Adaptive Threshold + BFS ───────────────────────────────
+   Uses Otsu (1979) adaptive threshold on the iris crop, then BFS from centre.
+   Referenced in: Wang et al. (2015), "Pupil and Glint Detection Using Wearable
+   Camera Sensor and Near-Infrared LED Array", Sensors, 15(12):29792-29812,
+   doi:10.3390/s151229792. */
+function pupilRadiusByOtsu(ed){
+  if(!ed) return ed?.r*0.32||2;
+  const{data,w,h,lcx,lcy,r}=ed;
+  const T=otsuThreshold(data,w,h);
+  const ci=(lcy*w+lcx)*4;
+  const startB=(data[ci]+data[ci+1]+data[ci+2])/3;
+  if(startB>=T) return r*0.32;
+  const visited=new Uint8Array(w*h);
+  const queue=new Int32Array(w*h*2);
+  let head=0,tail=0;
+  visited[lcy*w+lcx]=1;queue[tail++]=lcx;queue[tail++]=lcy;
+  let count=0;
+  while(head<tail){
+    const px=queue[head++],py=queue[head++];count++;
+    for(let d=0;d<4;d++){
+      const nx=px+(d===0?-1:d===1?1:0),ny=py+(d===2?-1:d===3?1:0);
+      if(nx<0||nx>=w||ny<0||ny>=h) continue;
+      const ni=ny*w+nx;if(visited[ni]) continue;
+      const b=(data[ni*4]+data[ni*4+1]+data[ni*4+2])/3;
+      if(b<T){visited[ni]=1;queue[tail++]=nx;queue[tail++]=ny;}
+    }
+  }
+  if(count<4) return r*0.32;
+  return Math.sqrt(count/Math.PI);
+}
+
+/* ── Estimate PIR using all three methods ──────────────────────────────────
+   irisPx: MediaPipe iris landmark geometry (Vakunov & Lagun, Google 2020,
+   https://research.google/blog/mediapipe-iris-real-time-iris-tracking-depth-estimation/)
+   Returns {pir, pirSET, pirOtsu, pupilPx, pupilPxSET, pupilPxOtsu, irisPx}  */
 function estimatePupilPIR(){
   if(!currentLM||currentLM.length<478||!videoEl||videoEl.readyState<2) return null;
   const lm=currentLM;
   const W=videoEl.videoWidth||640,H=videoEl.videoHeight||480;
   const px=pt=>({x:pt.x*W,y:pt.y*H});
-  // Left iris landmarks: 468=center, 469=left, 470=top, 471=right, 472=bottom
   const lc=px(lm[468]),ll=px(lm[469]),lt=px(lm[470]),lr=px(lm[471]),lb=px(lm[472]);
   const lIR=(Math.hypot(lr.x-ll.x,lr.y-ll.y)/2+Math.hypot(lt.x-lb.x,lt.y-lb.y)/2)/2;
-  // Right iris landmarks: 473=center, 474=left, 475=top, 476=right, 477=bottom
   const rc=px(lm[473]),rl=px(lm[474]),rt=px(lm[475]),rr=px(lm[476]),rb=px(lm[477]);
   const rIR=(Math.hypot(rr.x-rl.x,rr.y-rl.y)/2+Math.hypot(rt.x-rb.x,rt.y-rb.y)/2)/2;
+  const ipdPx=Math.hypot(lc.x-rc.x,lc.y-rc.y);
   if(lIR<2||rIR<2) return null;
   const ctx=getPupilCtx();
   ctx.drawImage(videoEl,0,0,W,H);
-  const lPR=estimatePupilRadius(ctx,lc,lIR,W,H);
-  const rPR=estimatePupilRadius(ctx,rc,rIR,W,H);
-  const avgIR=(lIR+rIR)/2, avgPR=(lPR+rPR)/2;
-  const pir=Math.min(0.92,Math.max(0.05,avgPR/avgIR));
-  return{pir,pupilPx:+avgPR.toFixed(2),irisPx:+avgIR.toFixed(2)};
+  const led=getEyeImageData(ctx,lc,lIR,W,H), red=getEyeImageData(ctx,rc,rIR,W,H);
+  const clip=v=>Math.min(0.92,Math.max(0.05,v));
+  const avgIR=(lIR+rIR)/2;
+  const avgPR      =(pupilRadiusByScan(led) +pupilRadiusByScan(red)) /2;
+  const avgPR_SET  =(pupilRadiusBySET(led)  +pupilRadiusBySET(red))  /2;
+  const avgPR_Otsu =(pupilRadiusByOtsu(led) +pupilRadiusByOtsu(red)) /2;
+  const pirSET=clip(avgPR_SET/avgIR);
+  const pirOtsu=clip(avgPR_Otsu/avgIR);
+  return{
+    // keep radial as optional comparison output
+    pir:pirSET,
+    pirRadial:clip(avgPR/avgIR),
+    pirSET,
+    pirOtsu,
+    pupilPx:+avgPR_SET.toFixed(2),
+    pupilPxRadial:+avgPR.toFixed(2),
+    pupilPxSET:+avgPR_SET.toFixed(2),
+    pupilPxOtsu:+avgPR_Otsu.toFixed(2),
+    irisPx:+avgIR.toFixed(2),
+    ipdPx:+ipdPx.toFixed(2)
+  };
 }
 
 /* ═══════════════════════════════════════════════════════════
    EXPERIMENT 4 — COGNITIVE LOAD
 ═══════════════════════════════════════════════════════════ */
 function startExperiment4(){
+  exp45IpdMm=readExp45IpdMm();
   exp4PhaseIdx=0;
   exp4PhaseData=EXP4_PHASES.map(p=>({...p,startT:0,endT:0,samples:[],mean:0}));
   exp4StartT=performance.now();
-  exp4PirSmoothed=null;exp4IrisPxSm=null;exp4PupilPxSm=null;
+  exp4IrisPxSm=null;exp4IpdPxSm=null;
+  exp4PirSETSm=null;exp4PupilPxSETSm=null;exp4PirOtsuSm=null;exp4PupilPxOtsuSm=null;
   if(!faceLoopId) startFaceLoop();
   showPhase('ph-experiment4');
   runExp4Phase(0);
@@ -1349,24 +1503,35 @@ function runExp4Phase(idx){
   clearInterval(exp4SampleId);
   exp4SampleId=setInterval(()=>{
     const res=estimatePupilPIR();if(!res)return;
-    exp4PirSmoothed=exp4PirSmoothed===null?res.pir:0.75*exp4PirSmoothed+0.25*res.pir;
     exp4IrisPxSm=exp4IrisPxSm===null?res.irisPx:0.75*exp4IrisPxSm+0.25*res.irisPx;
-    exp4PupilPxSm=exp4PupilPxSm===null?res.pupilPx:0.75*exp4PupilPxSm+0.25*res.pupilPx;
+    exp4IpdPxSm=exp4IpdPxSm===null?res.ipdPx:0.75*exp4IpdPxSm+0.25*res.ipdPx;
+    exp4PirSETSm=exp4PirSETSm===null?res.pirSET:0.75*exp4PirSETSm+0.25*res.pirSET;
+    exp4PupilPxSETSm=exp4PupilPxSETSm===null?res.pupilPxSET:0.75*exp4PupilPxSETSm+0.25*res.pupilPxSET;
+    exp4PirOtsuSm=exp4PirOtsuSm===null?res.pirOtsu:0.75*exp4PirOtsuSm+0.25*res.pirOtsu;
+    exp4PupilPxOtsuSm=exp4PupilPxOtsuSm===null?res.pupilPxOtsu:0.75*exp4PupilPxOtsuSm+0.25*res.pupilPxOtsu;
+    if(!exp4IpdPxSm||exp4IpdPxSm<10) return;
     const t=(performance.now()-exp4StartT)/1000;
-    const irisMm=IRIS_REAL_MM;
-    const pupilMm=+(exp4PupilPxSm/exp4IrisPxSm*IRIS_REAL_MM).toFixed(2);
-    exp4PhaseData[idx].samples.push({t,pir:+exp4PirSmoothed.toFixed(4),irisMm,pupilMm});
-    document.getElementById('exp4-pir').textContent=exp4PirSmoothed.toFixed(3);
-    document.getElementById('exp4-mm').textContent=`Iris: ${irisMm}mm · Pupil: ${pupilMm.toFixed(1)}mm`;
+    const mmPerPx=exp45IpdMm/exp4IpdPxSm;
+    const irisMm=+(exp4IrisPxSm*mmPerPx).toFixed(2);
+    const pupilMmSET=+(exp4PupilPxSETSm*mmPerPx).toFixed(2);
+    const pupilMmOtsu=+(exp4PupilPxOtsuSm*mmPerPx).toFixed(2);
+    exp4PhaseData[idx].samples.push({t,pir:+exp4PirSETSm.toFixed(4),pirSET:+exp4PirSETSm.toFixed(4),pirOtsu:+exp4PirOtsuSm.toFixed(4),irisMm,pupilMm:pupilMmSET,pupilMmSET,pupilMmOtsu});
+    document.getElementById('exp4-pir').textContent=`S:${exp4PirSETSm.toFixed(3)} | O:${exp4PirOtsuSm.toFixed(3)}`;
+    document.getElementById('exp4-mm').textContent=`S:${pupilMmSET.toFixed(1)} · O:${pupilMmOtsu.toFixed(1)} mm · Iris:${irisMm}mm`;
   },100);
   setTimeout(()=>{
     clearInterval(exp4SampleId);clearInterval(exp4TaskId);
     exp4PhaseData[idx].endT=(performance.now()-exp4StartT)/1000;
-    const pirs=exp4PhaseData[idx].samples.map(s=>s.pir);
-    const pupilMms=exp4PhaseData[idx].samples.map(s=>s.pupilMm);
+    const ss=exp4PhaseData[idx].samples;
+    const pirs=ss.map(s=>s.pir);
+    const pupilMms=ss.map(s=>s.pupilMm);
     exp4PhaseData[idx].mean=pirs.length?+(avg(pirs)).toFixed(4):0;
-    exp4PhaseData[idx].meanIrisMm=IRIS_REAL_MM;
+    exp4PhaseData[idx].meanSET=pirs.length?+(avg(ss.map(s=>s.pirSET))).toFixed(4):0;
+    exp4PhaseData[idx].meanOtsu=pirs.length?+(avg(ss.map(s=>s.pirOtsu))).toFixed(4):0;
+    exp4PhaseData[idx].meanIrisMm=ss.length?+(avg(ss.map(s=>s.irisMm))).toFixed(2):0;
     exp4PhaseData[idx].meanMm=pupilMms.length?+(avg(pupilMms)).toFixed(2):0;
+    exp4PhaseData[idx].meanMmSET=pupilMms.length?+(avg(ss.map(s=>s.pupilMmSET))).toFixed(2):0;
+    exp4PhaseData[idx].meanMmOtsu=pupilMms.length?+(avg(ss.map(s=>s.pupilMmOtsu))).toFixed(2):0;
     runExp4Phase(idx+1);
   },ph.dur);
 }
@@ -1381,10 +1546,12 @@ function finishExperiment4(){
    EXPERIMENT 5 — LUMINANCE RESPONSE
 ═══════════════════════════════════════════════════════════ */
 function startExperiment5(){
+  exp45IpdMm=readExp45IpdMm();
   exp5PhaseIdx=0;
   exp5PhaseData=EXP5_PHASES.map(p=>({...p,startT:0,endT:0,samples:[],mean:0}));
   exp5StartT=performance.now();
-  exp5PirSmoothed=null;exp5IrisPxSm=null;exp5PupilPxSm=null;
+  exp5IrisPxSm=null;exp5IpdPxSm=null;
+  exp5PirSETSm=null;exp5PupilPxSETSm=null;exp5PirOtsuSm=null;exp5PupilPxOtsuSm=null;
   if(!faceLoopId) startFaceLoop();
   showPhase('ph-experiment5');
   runExp5Phase(0);
@@ -1414,24 +1581,35 @@ function runExp5Phase(idx){
   clearInterval(exp5SampleId);
   exp5SampleId=setInterval(()=>{
     const res=estimatePupilPIR();if(!res)return;
-    exp5PirSmoothed=exp5PirSmoothed===null?res.pir:0.75*exp5PirSmoothed+0.25*res.pir;
     exp5IrisPxSm=exp5IrisPxSm===null?res.irisPx:0.75*exp5IrisPxSm+0.25*res.irisPx;
-    exp5PupilPxSm=exp5PupilPxSm===null?res.pupilPx:0.75*exp5PupilPxSm+0.25*res.pupilPx;
+    exp5IpdPxSm=exp5IpdPxSm===null?res.ipdPx:0.75*exp5IpdPxSm+0.25*res.ipdPx;
+    exp5PirSETSm=exp5PirSETSm===null?res.pirSET:0.75*exp5PirSETSm+0.25*res.pirSET;
+    exp5PupilPxSETSm=exp5PupilPxSETSm===null?res.pupilPxSET:0.75*exp5PupilPxSETSm+0.25*res.pupilPxSET;
+    exp5PirOtsuSm=exp5PirOtsuSm===null?res.pirOtsu:0.75*exp5PirOtsuSm+0.25*res.pirOtsu;
+    exp5PupilPxOtsuSm=exp5PupilPxOtsuSm===null?res.pupilPxOtsu:0.75*exp5PupilPxOtsuSm+0.25*res.pupilPxOtsu;
+    if(!exp5IpdPxSm||exp5IpdPxSm<10) return;
     const t=(performance.now()-exp5StartT)/1000;
-    const irisMm=IRIS_REAL_MM;
-    const pupilMm=+(exp5PupilPxSm/exp5IrisPxSm*IRIS_REAL_MM).toFixed(2);
-    exp5PhaseData[idx].samples.push({t,pir:+exp5PirSmoothed.toFixed(4),irisMm,pupilMm});
-    document.getElementById('exp5-pir').textContent=exp5PirSmoothed.toFixed(3);
-    document.getElementById('exp5-mm').textContent=`Iris: ${irisMm}mm · Pupil: ${pupilMm.toFixed(1)}mm`;
+    const mmPerPx=exp45IpdMm/exp5IpdPxSm;
+    const irisMm=+(exp5IrisPxSm*mmPerPx).toFixed(2);
+    const pupilMmSET=+(exp5PupilPxSETSm*mmPerPx).toFixed(2);
+    const pupilMmOtsu=+(exp5PupilPxOtsuSm*mmPerPx).toFixed(2);
+    exp5PhaseData[idx].samples.push({t,pir:+exp5PirSETSm.toFixed(4),pirSET:+exp5PirSETSm.toFixed(4),pirOtsu:+exp5PirOtsuSm.toFixed(4),irisMm,pupilMm:pupilMmSET,pupilMmSET,pupilMmOtsu});
+    document.getElementById('exp5-pir').textContent=`S:${exp5PirSETSm.toFixed(3)} | O:${exp5PirOtsuSm.toFixed(3)}`;
+    document.getElementById('exp5-mm').textContent=`S:${pupilMmSET.toFixed(1)} · O:${pupilMmOtsu.toFixed(1)} mm · Iris:${irisMm}mm`;
   },100);
   setTimeout(()=>{
     clearInterval(exp5SampleId);
     exp5PhaseData[idx].endT=(performance.now()-exp5StartT)/1000;
-    const pirs=exp5PhaseData[idx].samples.map(s=>s.pir);
-    const pupilMms=exp5PhaseData[idx].samples.map(s=>s.pupilMm);
+    const ss=exp5PhaseData[idx].samples;
+    const pirs=ss.map(s=>s.pir);
+    const pupilMms=ss.map(s=>s.pupilMm);
     exp5PhaseData[idx].mean=pirs.length?+(avg(pirs)).toFixed(4):0;
-    exp5PhaseData[idx].meanIrisMm=IRIS_REAL_MM;
+    exp5PhaseData[idx].meanSET=pirs.length?+(avg(ss.map(s=>s.pirSET??s.pir))).toFixed(4):0;
+    exp5PhaseData[idx].meanOtsu=pirs.length?+(avg(ss.map(s=>s.pirOtsu??s.pir))).toFixed(4):0;
+    exp5PhaseData[idx].meanIrisMm=ss.length?+(avg(ss.map(s=>s.irisMm))).toFixed(2):0;
     exp5PhaseData[idx].meanMm=pupilMms.length?+(avg(pupilMms)).toFixed(2):0;
+    exp5PhaseData[idx].meanMmSET=pupilMms.length?+(avg(ss.map(s=>s.pupilMmSET??s.pupilMm))).toFixed(2):0;
+    exp5PhaseData[idx].meanMmOtsu=pupilMms.length?+(avg(ss.map(s=>s.pupilMmOtsu??s.pupilMm))).toFixed(2):0;
     runExp5Phase(idx+1);
   },ph.dur);
 }
@@ -1621,7 +1799,7 @@ function buildLineReplayCanvas(lineWords,run){
       ctx.fillText(wd.word,cx,20);
     });
 
-    // Baseline
+    // Reference line
     ctx.strokeStyle='rgba(48,54,61,0.9)';ctx.lineWidth=1;
     ctx.beginPath();ctx.moveTo(0,34);ctx.lineTo(CW,34);ctx.stroke();
 
@@ -1809,19 +1987,29 @@ function buildPirChart(phases){
   const tStart=allSamples.length?allSamples[0].t:0;
   const tEnd=allSamples.length?allSamples[allSamples.length-1].t:1;
   const datasetPir=allSamples.map(s=>({x:s.t,y:s.pir}));
+  const datasetPirSET=allSamples.map(s=>({x:s.t,y:s.pirSET??s.pir}));
+  const datasetPirOtsu=allSamples.map(s=>({x:s.t,y:s.pirOtsu??s.pir}));
   const datasetPupilMm=allSamples.map(s=>({x:s.t,y:s.pupilMm!=null?s.pupilMm:+(s.pir*IRIS_REAL_MM).toFixed(2)}));
+  const datasetPupilMmSET=allSamples.map(s=>({x:s.t,y:s.pupilMmSET!=null?s.pupilMmSET:+((s.pirSET??s.pir)*IRIS_REAL_MM).toFixed(2)}));
+  const datasetPupilMmOtsu=allSamples.map(s=>({x:s.t,y:s.pupilMmOtsu!=null?s.pupilMmOtsu:+((s.pirOtsu??s.pir)*IRIS_REAL_MM).toFixed(2)}));
   const datasetIrisMm=[{x:tStart,y:IRIS_REAL_MM},{x:tEnd,y:IRIS_REAL_MM}];
   const canvas=document.getElementById('comparison-chart');
   if(compChartInst){compChartInst.destroy();compChartInst=null;}
   compChartInst=new Chart(canvas,{
     type:'line',
     data:{datasets:[
-      {label:'PIR (smoothed)',data:datasetPir,yAxisID:'y',
-        borderColor:'#58a6ff',backgroundColor:'rgba(88,166,255,0.08)',
-        borderWidth:2,pointRadius:0,tension:0.3,fill:true},
-      {label:'Pupil (mm)',data:datasetPupilMm,yAxisID:'y1',
+      {label:'PIR — SET',data:datasetPirSET,yAxisID:'y',
         borderColor:'#f0c000',backgroundColor:'transparent',
-        borderWidth:1.5,pointRadius:0,tension:0.3},
+        borderWidth:2,pointRadius:0,tension:0.3,fill:false},
+      {label:'PIR — Otsu',data:datasetPirOtsu,yAxisID:'y',
+        borderColor:'#3fb950',backgroundColor:'transparent',
+        borderWidth:2,pointRadius:0,tension:0.3,fill:false},
+      {label:'Pupil mm — SET',data:datasetPupilMmSET,yAxisID:'y1',
+        borderColor:'#f0c000',backgroundColor:'transparent',
+        borderWidth:1,pointRadius:0,tension:0.3,borderDash:[2,3]},
+      {label:'Pupil mm — Otsu',data:datasetPupilMmOtsu,yAxisID:'y1',
+        borderColor:'#3fb950',backgroundColor:'transparent',
+        borderWidth:1,pointRadius:0,tension:0.3,borderDash:[3,3]},
       {label:'Iris (mm, reference)',data:datasetIrisMm,yAxisID:'y1',
         borderColor:'rgba(120,200,120,0.6)',backgroundColor:'transparent',
         borderWidth:1,pointRadius:0,tension:0,borderDash:[6,4]}
@@ -1849,13 +2037,21 @@ function buildPhaseSummaryCards(phases){
     const el=document.createElement('div');
     el.className='method-card';
     const c=ph.name==='hard'?'#f85149':ph.name==='easy'?'#3fb950':ph.name==='bright'?'#f0c000':ph.name==='dark'?'#8b949e':'#58a6ff';
-    const pupilMmVal=ph.meanMm!=null?ph.meanMm:(ph.mean?+(ph.mean*IRIS_REAL_MM).toFixed(2):null);
+    const pirR=ph.mean??null;
+    const pirS=ph.meanSET??pirR;
+    const pirO=ph.meanOtsu??pirR;
+    const pupilMmS=ph.meanMmSET!=null?ph.meanMmSET:(pirS!=null?+(pirS*IRIS_REAL_MM).toFixed(2):null);
+    const pupilMmO=ph.meanMmOtsu!=null?ph.meanMmOtsu:(pirO!=null?+(pirO*IRIS_REAL_MM).toFixed(2):null);
     const irisMmVal=ph.meanIrisMm!=null?ph.meanIrisMm:IRIS_REAL_MM;
     el.innerHTML=`<div class="mc-label" style="color:${c}">${ph.label}</div>
-      <div class="mc-value">${ph.mean?ph.mean.toFixed(3):'–'}</div>
-      <div class="mc-unit">mean PIR</div>
-      ${pupilMmVal!=null?`<div class="mc-unit" style="color:#f0c000;margin-top:4px">Pupil: ${pupilMmVal.toFixed?pupilMmVal.toFixed(2):pupilMmVal} mm</div>`:''}
-      <div class="mc-unit" style="color:rgba(120,200,120,0.8);margin-top:2px">Iris: ${irisMmVal} mm</div>`;
+      <table class="tbl" style="margin-top:8px;font-size:.75rem">
+        <thead><tr><th>Method</th><th>PIR</th><th>Pupil mm</th></tr></thead>
+        <tbody>
+          <tr><td style="color:#f0c000">SET</td><td>${pirS!=null?pirS.toFixed(3):'–'}</td><td>${pupilMmS!=null?pupilMmS.toFixed(2)+' mm':'–'}</td></tr>
+          <tr><td style="color:#3fb950">Otsu</td><td>${pirO!=null?pirO.toFixed(3):'–'}</td><td>${pupilMmO!=null?pupilMmO.toFixed(2)+' mm':'–'}</td></tr>
+        </tbody>
+      </table>
+      <div class="mc-unit" style="color:rgba(120,200,120,0.8);margin-top:4px">Iris reference: ${irisMmVal} mm</div>`;
     cards.appendChild(el);
   });
 }
@@ -1874,24 +2070,32 @@ function renderResultsExp4(run,timeStr){
   const hc=document.getElementById('heatmaps-container');hc.innerHTML='';
   const easy=run.phases.find(p=>p.name==='easy');
   const hard=run.phases.find(p=>p.name==='hard');
-  const base=run.phases.find(p=>p.name==='baseline');
   const rows=[
-    {phase:'Baseline',  mean:base?.mean, meanMm:base?.meanMm, meanIrisMm:base?.meanIrisMm, expected:'–',             color:'#58a6ff'},
-    {phase:'Easy Task', mean:easy?.mean, meanMm:easy?.meanMm, meanIrisMm:easy?.meanIrisMm, expected:'↓ or baseline', color:'#3fb950'},
-    {phase:'Hard Task', mean:hard?.mean, meanMm:hard?.meanMm, meanIrisMm:hard?.meanIrisMm, expected:'↑ dilation',    color:'#f85149'},
+    {phase:'Easy Task', mean:easy?.mean, meanSET:easy?.meanSET, meanOtsu:easy?.meanOtsu, meanMm:easy?.meanMm, meanMmSET:easy?.meanMmSET, meanMmOtsu:easy?.meanMmOtsu, meanIrisMm:easy?.meanIrisMm, expected:'Lower than hard', color:'#3fb950'},
+    {phase:'Hard Task', mean:hard?.mean, meanSET:hard?.meanSET, meanOtsu:hard?.meanOtsu, meanMm:hard?.meanMm, meanMmSET:hard?.meanMmSET, meanMmOtsu:hard?.meanMmOtsu, meanIrisMm:hard?.meanIrisMm, expected:'↑ dilation',    color:'#f85149'},
   ];
-  const detected=hard&&easy?hard.mean>easy.mean?'Detected — hard task PIR > easy task PIR':'Not detected — no significant difference':'–';
+  const detected=hard&&easy
+    ? ((hard.meanSET??hard.mean)>(easy.meanSET??easy.mean) && (hard.meanOtsu??hard.mean)>(easy.meanOtsu??easy.mean)
+      ? 'Detected — hard task PIR > easy task PIR (SET & Otsu)'
+      : 'Not detected — no significant difference in SET/Otsu')
+    : '–';
   let tbl=`<table class="tbl" style="max-width:720px"><thead><tr>
-    <th>Phase</th><th>Mean PIR</th><th>Pupil (mm)</th><th>Iris (mm)</th><th>Expected</th><th>Δ PIR vs Baseline</th></tr></thead><tbody>`;
+    <th>Phase</th><th>SET PIR</th><th>Otsu PIR</th><th>Pupil mm (SET)</th><th>Pupil mm (Otsu)</th><th>Iris (mm)</th><th>Expected</th></tr></thead><tbody>`;
   rows.forEach(r=>{
-    const delta=base&&r.mean?+(r.mean-base.mean).toFixed(4):0;
-    const dStr=r.phase==='Baseline'?'–':(delta>0?'+':'')+delta;
-    const pupilMmVal=r.meanMm!=null?r.meanMm:(r.mean?+(r.mean*IRIS_REAL_MM).toFixed(2):null);
+    const pirSET=r.meanSET??r.mean;
+    const pirOtsu=r.meanOtsu??r.mean;
+    const pupilMmSET=r.meanMmSET!=null?r.meanMmSET:(pirSET!=null?+(pirSET*IRIS_REAL_MM).toFixed(2):null);
+    const pupilMmOtsu=r.meanMmOtsu!=null?r.meanMmOtsu:(pirOtsu!=null?+(pirOtsu*IRIS_REAL_MM).toFixed(2):null);
     const irisMmVal=r.meanIrisMm!=null?r.meanIrisMm:IRIS_REAL_MM;
-    tbl+=`<tr><td style="color:${r.color}">${r.phase}</td><td style="font-weight:600">${r.mean?r.mean.toFixed(3):'–'}</td><td style="color:#f0c000;font-weight:600">${pupilMmVal!=null?pupilMmVal+' mm':'–'}</td><td style="color:rgba(120,200,120,0.9)">${irisMmVal} mm</td><td style="color:#8b949e">${r.expected}</td><td style="color:${delta>0?'#3fb950':delta<0?'#f85149':'#8b949e'}">${dStr}</td></tr>`;
+    tbl+=`<tr><td style="color:${r.color}">${r.phase}</td><td style="font-weight:600;color:#f0c000">${pirSET!=null?pirSET.toFixed(3):'–'}</td><td style="font-weight:600;color:#3fb950">${pirOtsu!=null?pirOtsu.toFixed(3):'–'}</td><td style="color:#f0c000;font-weight:600">${pupilMmSET!=null?pupilMmSET:'–'}</td><td style="color:#3fb950;font-weight:600">${pupilMmOtsu!=null?pupilMmOtsu:'–'}</td><td style="color:rgba(120,200,120,0.9)">${irisMmVal} mm</td><td style="color:#8b949e">${r.expected}</td></tr>`;
   });
+  const hardEasySet=(hard&&easy&&hard.meanSET!=null&&easy.meanSET!=null)?+(hard.meanSET-easy.meanSET).toFixed(4):null;
+  const hardEasyOtsu=(hard&&easy&&hard.meanOtsu!=null&&easy.meanOtsu!=null)?+(hard.meanOtsu-easy.meanOtsu).toFixed(4):null;
+  const hardEasySetStr=hardEasySet==null?'–':(hardEasySet>0?'+':'')+hardEasySet;
+  const hardEasyOtsuStr=hardEasyOtsu==null?'–':(hardEasyOtsu>0?'+':'')+hardEasyOtsu;
   tbl+=`</tbody></table>
-    <p style="margin-top:14px;font-size:.82rem;color:${hard&&easy&&hard.mean>easy.mean?'#3fb950':'#f85149'}">${detected}</p>
+    <p style="margin-top:10px;font-size:.82rem;color:#8b949e">Δ Hard-Easy (SET): <span style="color:${hardEasySet>0?'#3fb950':hardEasySet<0?'#f85149':'#8b949e'}">${hardEasySetStr}</span> | Δ Hard-Easy (Otsu): <span style="color:${hardEasyOtsu>0?'#3fb950':hardEasyOtsu<0?'#f85149':'#8b949e'}">${hardEasyOtsuStr}</span></p>
+    <p style="margin-top:14px;font-size:.82rem;color:${detected.includes('Detected')?'#3fb950':detected==='–'?'#8b949e':'#f85149'}">${detected}</p>
     <p style="margin-top:8px;font-size:.75rem;color:#8b949e">Note: PIR is sensitive to ambient lighting and camera auto-exposure. Use relative changes, not absolute values.</p>`;
   hc.innerHTML=tbl;
 }
@@ -1908,25 +2112,32 @@ function renderResultsExp5(run,timeStr){
   document.getElementById('sec-heatmaps').style.display='block';
   document.getElementById('sec-heatmaps-title').textContent='Luminance Response Summary';
   const hc=document.getElementById('heatmaps-container');hc.innerHTML='';
-  const base=run.phases.find(p=>p.name==='baseline');
   const bright=run.phases.find(p=>p.name==='bright');
   const dark=run.phases.find(p=>p.name==='dark');
   const rows=[
-    {phase:'Baseline (grey)', mean:base?.mean,   meanMm:base?.meanMm,   meanIrisMm:base?.meanIrisMm,   expected:'Reference'},
-    {phase:'Bright (white)',  mean:bright?.mean, meanMm:bright?.meanMm, meanIrisMm:bright?.meanIrisMm, expected:'↓ constriction', ok:bright&&base?bright.mean<base.mean:null},
-    {phase:'Dark (black)',    mean:dark?.mean,   meanMm:dark?.meanMm,   meanIrisMm:dark?.meanIrisMm,   expected:'↑ dilation',     ok:dark&&base?dark.mean>base.mean:null},
+    {phase:'Bright (white)',  mean:bright?.mean, meanSET:bright?.meanSET, meanOtsu:bright?.meanOtsu, meanMm:bright?.meanMm, meanMmSET:bright?.meanMmSET, meanMmOtsu:bright?.meanMmOtsu, meanIrisMm:bright?.meanIrisMm, expected:'↓ constriction'},
+    {phase:'Dark (black)',    mean:dark?.mean, meanSET:dark?.meanSET, meanOtsu:dark?.meanOtsu, meanMm:dark?.meanMm, meanMmSET:dark?.meanMmSET, meanMmOtsu:dark?.meanMmOtsu, meanIrisMm:dark?.meanIrisMm, expected:'↑ dilation'},
   ];
   let tbl=`<table class="tbl" style="max-width:800px"><thead><tr>
-    <th>Phase</th><th>Mean PIR</th><th>Pupil (mm)</th><th>Iris (mm)</th><th>Expected</th><th>Δ PIR vs Baseline</th><th>Detected?</th></tr></thead><tbody>`;
+    <th>Phase</th><th>SET PIR</th><th>Otsu PIR</th><th>Pupil mm (SET)</th><th>Pupil mm (Otsu)</th><th>Iris (mm)</th><th>Expected</th></tr></thead><tbody>`;
   rows.forEach(r=>{
-    const delta=base&&r.mean?+(r.mean-base.mean).toFixed(4):0;
-    const dStr=r.phase.includes('Baseline')?'–':(delta>0?'+':'')+delta;
-    const det=r.ok===null?'–':r.ok?'<span style="color:#3fb950">Yes</span>':'<span style="color:#f85149">No</span>';
-    const pupilMmVal=r.meanMm!=null?r.meanMm:(r.mean?+(r.mean*IRIS_REAL_MM).toFixed(2):null);
+    const pirSET=r.meanSET??r.mean;
+    const pirOtsu=r.meanOtsu??r.mean;
+    const pupilMmSET=r.meanMmSET!=null?r.meanMmSET:(pirSET!=null?+(pirSET*IRIS_REAL_MM).toFixed(2):null);
+    const pupilMmOtsu=r.meanMmOtsu!=null?r.meanMmOtsu:(pirOtsu!=null?+(pirOtsu*IRIS_REAL_MM).toFixed(2):null);
     const irisMmVal=r.meanIrisMm!=null?r.meanIrisMm:IRIS_REAL_MM;
-    tbl+=`<tr><td>${r.phase}</td><td style="font-weight:600">${r.mean?r.mean.toFixed(3):'–'}</td><td style="color:#f0c000;font-weight:600">${pupilMmVal!=null?pupilMmVal+' mm':'–'}</td><td style="color:rgba(120,200,120,0.9)">${irisMmVal} mm</td><td style="color:#8b949e">${r.expected}</td><td style="color:${delta>0?'#3fb950':delta<0?'#f0c000':'#8b949e'}">${dStr}</td><td>${det}</td></tr>`;
+    const brightSetOK=bright&&dark&&bright.meanSET!=null&&dark.meanSET!=null?dark.meanSET>bright.meanSET:null;
+    const brightOtsuOK=bright&&dark&&bright.meanOtsu!=null&&dark.meanOtsu!=null?dark.meanOtsu>bright.meanOtsu:null;
+    let det='–';
+    if(r.phase.includes('Dark') && brightSetOK!=null && brightOtsuOK!=null) det=(brightSetOK&&brightOtsuOK)?'<span style="color:#3fb950">Yes (Dark > Bright, SET+Otsu)</span>':'<span style="color:#f85149">No</span>';
+    tbl+=`<tr><td>${r.phase}</td><td style="font-weight:600;color:#f0c000">${pirSET!=null?pirSET.toFixed(3):'–'}</td><td style="font-weight:600;color:#3fb950">${pirOtsu!=null?pirOtsu.toFixed(3):'–'}</td><td style="color:#f0c000;font-weight:600">${pupilMmSET!=null?pupilMmSET:'–'}</td><td style="color:#3fb950;font-weight:600">${pupilMmOtsu!=null?pupilMmOtsu:'–'}</td><td style="color:rgba(120,200,120,0.9)">${irisMmVal} mm</td><td style="color:#8b949e">${r.expected}</td></tr>`;
   });
+  const darkBrightSet=(dark&&bright&&dark.meanSET!=null&&bright.meanSET!=null)?+(dark.meanSET-bright.meanSET).toFixed(4):null;
+  const darkBrightOtsu=(dark&&bright&&dark.meanOtsu!=null&&bright.meanOtsu!=null)?+(dark.meanOtsu-bright.meanOtsu).toFixed(4):null;
+  const darkBrightSetStr=darkBrightSet==null?'–':(darkBrightSet>0?'+':'')+darkBrightSet;
+  const darkBrightOtsuStr=darkBrightOtsu==null?'–':(darkBrightOtsu>0?'+':'')+darkBrightOtsu;
   tbl+=`</tbody></table>
+    <p style="margin-top:10px;font-size:.82rem;color:#8b949e">Δ Dark-Bright (SET): <span style="color:${darkBrightSet>0?'#3fb950':darkBrightSet<0?'#f85149':'#8b949e'}">${darkBrightSetStr}</span> | Δ Dark-Bright (Otsu): <span style="color:${darkBrightOtsu>0?'#3fb950':darkBrightOtsu<0?'#f85149':'#8b949e'}">${darkBrightOtsuStr}</span></p>
     <p style="margin-top:10px;font-size:.75rem;color:#8b949e">Note: webcam auto-exposure adapts to screen brightness and may confound absolute PIR. Relative changes (Δ) are more meaningful than absolute PIR values.</p>`;
   hc.innerHTML=tbl;
 }
@@ -2048,11 +2259,14 @@ function saveResults(){
   if(latestRun){
     let csv='';
     if(latestRun.experimentType===4||latestRun.experimentType===5){
-      csv='Phase,Duration_s,MeanPIR,MeanPupilMm,MeanIrisMm,Samples\n';
+      csv='Phase,Duration_s,PIR_SET,PIR_Otsu,PupilMm_SET,PupilMm_Otsu,IrisMm,Samples\n';
       latestRun.phases.forEach(ph=>{
-        const pupilMmVal=ph.meanMm!=null?ph.meanMm:+(ph.mean*IRIS_REAL_MM).toFixed(2);
+        const pirSET=ph.meanSET!=null?ph.meanSET:ph.mean;
+        const pirOtsu=ph.meanOtsu!=null?ph.meanOtsu:ph.mean;
+        const pupilMmSET=ph.meanMmSET!=null?ph.meanMmSET:+(pirSET*IRIS_REAL_MM).toFixed(2);
+        const pupilMmOtsu=ph.meanMmOtsu!=null?ph.meanMmOtsu:+(pirOtsu*IRIS_REAL_MM).toFixed(2);
         const irisMmVal=ph.meanIrisMm!=null?ph.meanIrisMm:IRIS_REAL_MM;
-        csv+=`"${ph.label}",${ph.dur/1000},${ph.mean},${pupilMmVal},${irisMmVal},${ph.samples.length}\n`;
+        csv+=`"${ph.label}",${ph.dur/1000},${pirSET},${pirOtsu},${pupilMmSET},${pupilMmOtsu},${irisMmVal},${ph.samples.length}\n`;
       });
     } else if(latestRun.experimentType===3){
       csv='Method,Direction,AccuracyPct,OnScreen,Total,LeakagePct\n';
