@@ -558,6 +558,9 @@ let exp3TimerId     = null;
 let exp3CountdownId = null;
 let exp3DirStart    = null;
 
+// Pupil debug overlay (Exp 4/5)
+let _lastPIRDebug   = null;  // per-eye geometry for cam overlay
+
 // Experiment 4 state (cognitive load)
 let _pupilCanvas    = null;
 let _pupilCtx       = null;
@@ -641,6 +644,24 @@ function startSelectDraw(){
       ctx.fillStyle='rgba(88,166,255,0.85)';
       currentLM.forEach(({x,y})=>{ctx.beginPath();ctx.arc(x*240,y*180,1,0,Math.PI*2);ctx.fill();});
     }
+    // Pupil debug overlay (Exp 4/5): draw iris + SET + Otsu circles per eye
+    if(_lastPIRDebug){
+      const{lc,lIR,lPrSET,lPrOtsu,rc,rIR,rPrSET,rPrOtsu,W:vW,H:vH}=_lastPIRDebug;
+      const sx=240/vW,sy=180/vH;
+      function drawEye(center,irisR,prSET,prOtsu){
+        const cx=center.x*sx,cy=center.y*sy;
+        ctx.lineWidth=1;
+        ctx.strokeStyle='rgba(88,166,255,0.6)';  // blue = iris
+        ctx.beginPath();ctx.arc(cx,cy,irisR*sx,0,Math.PI*2);ctx.stroke();
+        ctx.lineWidth=1.5;
+        ctx.strokeStyle='rgba(240,192,0,0.9)';   // yellow = SET pupil
+        ctx.beginPath();ctx.arc(cx,cy,prSET*sx,0,Math.PI*2);ctx.stroke();
+        ctx.strokeStyle='rgba(63,185,80,0.9)';   // green = Otsu pupil
+        ctx.beginPath();ctx.arc(cx,cy,prOtsu*sx,0,Math.PI*2);ctx.stroke();
+      }
+      drawEye(lc,lIR,lPrSET,lPrOtsu);
+      drawEye(rc,rIR,rPrSET,rPrOtsu);
+    }
     selectDrawId=setTimeout(loop,66);
   }
   loop();
@@ -660,7 +681,7 @@ function showPhase(id){
     if(!faceLoopId) startFaceLoop();
     startSelectDraw();
     if(camW) camW.classList.add('cam-visible');
-  } else if(id==='ph-experiment3'){
+  } else if(id==='ph-experiment3'||id==='ph-experiment4'||id==='ph-experiment5'){
     startSelectDraw();
     if(camW) camW.classList.add('cam-visible');
   } else {
@@ -1467,9 +1488,12 @@ function estimatePupilPIR(){
   ctx.drawImage(videoEl,0,0,W,H);
   const led=getEyeImageData(ctx,lc,lIR,W,H), red=getEyeImageData(ctx,rc,rIR,W,H);
   const clip=v=>Math.min(0.92,Math.max(0.05,v));
-  const avgIR      = lIR+rIR;                                       // avg iris diameter (px)
-  const avgPR_SET  = pupilRadiusBySET(led)  +pupilRadiusBySET(red);  // avg pupil diameter (px)
-  const avgPR_Otsu = pupilRadiusByOtsu(led) +pupilRadiusByOtsu(red); // avg pupil diameter (px)
+  const lPrSET=pupilRadiusBySET(led),  rPrSET=pupilRadiusBySET(red);
+  const lPrOtsu=pupilRadiusByOtsu(led),rPrOtsu=pupilRadiusByOtsu(red);
+  const avgIR      = lIR+rIR;              // avg iris diameter (px)
+  const avgPR_SET  = lPrSET+rPrSET;        // avg pupil diameter (px)
+  const avgPR_Otsu = lPrOtsu+rPrOtsu;      // avg pupil diameter (px)
+  _lastPIRDebug={lc,lIR,lPrSET,lPrOtsu,rc,rIR,rPrSET,rPrOtsu,W,H};
   const pirSET=clip(avgPR_SET/avgIR);
   const pirOtsu=clip(avgPR_Otsu/avgIR);
   return{
@@ -1564,6 +1588,7 @@ function runExp4Phase(idx){
   },ph.dur);
 }
 function finishExperiment4(){
+  _lastPIRDebug=null;
   clearInterval(exp4SampleId);clearInterval(exp4TaskId);clearInterval(exp4TimerId);
   const run={experimentType:4,timestamp:new Date().toISOString(),phases:exp4PhaseData};
   allRuns.push(run);latestRunIdx=allRuns.length-1;
@@ -1642,6 +1667,7 @@ function runExp5Phase(idx){
   },ph.dur);
 }
 function finishExperiment5(){
+  _lastPIRDebug=null;
   clearInterval(exp5SampleId);clearInterval(exp5TimerId);
   // Restore grey background
   const bg=document.getElementById('exp5-bg');if(bg)bg.style.background='#7f7f7f';
