@@ -23,6 +23,9 @@
     #cam-preview{width:240px;height:180px;object-fit:cover;display:block;transform:scaleX(-1)}
     #cam-canvas{position:absolute;top:0;left:0;width:240px;height:180px;pointer-events:none;transform:scaleX(-1)}
     #cam-status{font-size:.75rem;color:#8b949e}
+    #exp3-face-indicator{position:absolute;bottom:4px;left:4px;right:4px;text-align:center;font-size:.7rem;font-weight:700;padding:2px 4px;border-radius:4px;pointer-events:none;display:none}
+    #exp3-face-indicator.detected{background:rgba(63,185,80,.35);color:#3fb950;display:block}
+    #exp3-face-indicator.lost{background:rgba(248,81,73,.35);color:#f85149;display:block}
 
     /* ── Gaze dots (one per method) ─────────────────────── */
     .gaze-dot-m{
@@ -610,7 +613,11 @@ async function initFaceMesh(){
   if(typeof FaceMesh==='undefined') throw new Error('MediaPipe FaceMesh not loaded');
   faceMesh=new FaceMesh({locateFile:f=>`/mediapipe/face_mesh/${f}`});
   faceMesh.setOptions({maxNumFaces:1,refineLandmarks:true,minDetectionConfidence:0.5,minTrackingConfidence:0.5});
-  faceMesh.onResults(res=>{currentLM=(res.multiFaceLandmarks&&res.multiFaceLandmarks[0])||null;});
+  faceMesh.onResults(res=>{
+    currentLM=(res.multiFaceLandmarks&&res.multiFaceLandmarks[0])||null;
+    const ind=document.getElementById('exp3-face-indicator');
+    if(ind){ind.className=currentLM?'detected':'lost';ind.textContent=currentLM?'Face detected':'No face';}
+  });
   await faceMesh.initialize();
 }
 function startFaceLoop(){
@@ -651,6 +658,9 @@ function showPhase(id){
   const camW=document.getElementById('cam-widget');
   if(id==='ph-select'){
     if(!faceLoopId) startFaceLoop();
+    startSelectDraw();
+    if(camW) camW.classList.add('cam-visible');
+  } else if(id==='ph-experiment3'){
     startSelectDraw();
     if(camW) camW.classList.add('cam-visible');
   } else {
@@ -1194,8 +1204,10 @@ function finishExperiment2(){
 function startExperiment3(){
   exp3DirIndex=0;exp3Results=[];
   exp3Samples={'webgazer':[]};
+  currentLM=null;  // clear stale landmarks from previous run
   gazeVisible=false;updateGazeDot(null,null,null);
   if(wgRunning) try{webgazer.removeMouseEventListeners();}catch(_){}
+  if(!faceLoopId) startFaceLoop();  // ensure face loop is running (may have been stopped after previous run)
   showPhase('ph-experiment3');setTimeout(showNextDirection3,600);
 }
 
@@ -1244,6 +1256,12 @@ function showNextDirection3(){
 
 function collectGazeSampleExp3(){
   const t=(performance.now()-exp3DirStart-EXP3_SKIP_MS)/1000;
+  if(!currentLM){
+    // No face detected — count as off-screen for all methods
+    METHODS.forEach(m=>exp3Samples[m].push({t,x:-1,y:-1,noFace:true}));
+    updateGazeDot(null,null,null);
+    return;
+  }
   METHODS.forEach(m=>{
     const g=getCurrentGaze(m);if(!g||!isFinite(g.x)||!isFinite(g.y)) return;
     exp3Samples[m].push({t,x:g.x,y:g.y});updateGazeDot(m,g.x,g.y);
@@ -1253,6 +1271,8 @@ function exp3Proceed(){document.getElementById('exp3-proceed-btn').style.display
 
 function finishExperiment3(){
   updateGazeDot(null,null,null);
+  document.getElementById('cam-widget')?.classList.remove('cam-visible');
+  const ind=document.getElementById('exp3-face-indicator');if(ind) ind.className='';
   if(wgRunning) try{webgazer.addMouseEventListeners();}catch(_){}
   const run={experimentType:3,timestamp:new Date().toISOString(),results:{}};
   METHODS.forEach(m=>{
@@ -2335,6 +2355,7 @@ window.addEventListener('beforeunload',()=>{
   <div id="cam-video-wrap">
     <video id="cam-preview" autoplay playsinline muted></video>
     <canvas id="cam-canvas"></canvas>
+    <div id="exp3-face-indicator"></div>
   </div>
   <div id="cam-status">Starting camera…</div>
 </div>
