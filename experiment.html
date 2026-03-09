@@ -1321,36 +1321,81 @@ function getEyeImageData(ctx,center,irisR,W,H){
 }
 
 /* ── Method 1: SET (Sinusoidal Eye-Tracker) ────────────────────────────────
-   Binary threshold T=30, min region 600px (on 640×480 full frame).
-   Reference: Javadi et al. (2015), "SET: a pupil detection method using
-   sinusoidal approximation", Frontiers in Neuroengineering,
-   doi:10.3389/fneng.2015.00004, PMID:25904858.
-   Applied here to the iris crop; min region scaled proportionally. */
+   Javadi et al. (2015), "SET: a pupil detection method using sinusoidal
+   approximation", Frontiers in Neuroengineering, doi:10.3389/fneng.2015.00004.
+   Steps per paper: (1) binary threshold T=30, (2) all connected components
+   (4-connectivity), (3) min-size filter 600px scaled to crop,
+   (4) boundary pixel extraction (boundary ≈ convex hull border),
+   (5) sinusoidal ellipse fit x=h+a·cos(ω), y=k+b·sin(ω) via normal equations
+   where ω=atan2(y−cy, x−cx), (6) select most circular (a/b → 1),
+   radius = √(a·b). Applied to iris crop; min-region scaled proportionally. */
 function pupilRadiusBySET(ed){
   if(!ed) return ed?.r*0.32||2;
-  const{data,w,h,lcx,lcy,r}=ed;
-  const T=SET_THRESHOLD; // SET binary threshold (Javadi et al. 2015)
-  const minPx=Math.max(10,Math.round(SET_MIN_REGION_BASE*((w*h)/SET_BASE_FRAME_AREA)));
-  const ci=(lcy*w+lcx)*4;
-  const startB=(data[ci]+data[ci+1]+data[ci+2])/3;
-  if(startB>=T) return r*0.32; // centre not dark enough for SET threshold
-  const visited=new Uint8Array(w*h);
-  const queue=new Int32Array(w*h*2);
-  let head=0,tail=0;
-  visited[lcy*w+lcx]=1;queue[tail++]=lcx;queue[tail++]=lcy;
-  let count=0;
-  while(head<tail){
-    const px=queue[head++],py=queue[head++];count++;
-    for(let d=0;d<4;d++){
-      const nx=px+(d===0?-1:d===1?1:0),ny=py+(d===2?-1:d===3?1:0);
-      if(nx<0||nx>=w||ny<0||ny>=h) continue;
-      const ni=ny*w+nx;if(visited[ni]) continue;
-      const b=(data[ni*4]+data[ni*4+1]+data[ni*4+2])/3;
-      if(b<T){visited[ni]=1;queue[tail++]=nx;queue[tail++]=ny;}
+  const{data,w,h,r}=ed;
+  const T=SET_THRESHOLD;
+  const minPx=Math.max(6,Math.round(SET_MIN_REGION_BASE*((w*h)/SET_BASE_FRAME_AREA)));
+  const N=w*h;
+
+  // Step 1: binary threshold over full crop
+  const dark=new Uint8Array(N);
+  for(let i=0;i<N;i++) dark[i]=(data[i*4]+data[i*4+1]+data[i*4+2])/3<T?1:0;
+
+  // Steps 2–3: find ALL connected components ≥ minPx (4-connectivity BFS)
+  const visited=new Uint8Array(N);
+  const queue=new Int32Array(N);
+  const comps=[];
+  for(let seed=0;seed<N;seed++){
+    if(!dark[seed]||visited[seed]) continue;
+    const pixels=[],boundary=[];
+    let head=0,tail=0;
+    visited[seed]=1;queue[tail++]=seed;
+    while(head<tail){
+      const idx=queue[head++];
+      pixels.push(idx);
+      const px=idx%w,py=(idx/w)|0;
+      let isBnd=false;
+      const nb=[px>0?idx-1:-1, px<w-1?idx+1:-1, py>0?idx-w:-1, py<h-1?idx+w:-1];
+      for(const ni of nb){
+        if(ni<0){isBnd=true;continue;}
+        if(!dark[ni]){isBnd=true;continue;}
+        if(visited[ni]) continue;
+        visited[ni]=1;queue[tail++]=ni;
+      }
+      if(isBnd) boundary.push(idx);
     }
+    if(pixels.length>=minPx) comps.push({pixels,boundary});
   }
-  if(count<minPx) return r*0.32;
-  return Math.sqrt(count/Math.PI);
+  if(!comps.length) return r*0.32;
+
+  // Steps 4–6: sinusoidal ellipse fit on boundary pixels, pick most circular
+  let bestR=r*0.32,bestCirc=-1;
+  for(const{pixels,boundary}of comps){
+    // centroid of the full dark region
+    let cx=0,cy=0;
+    for(const idx of pixels){cx+=idx%w;cy+=(idx/w)|0;}
+    cx/=pixels.length;cy/=pixels.length;
+
+    // fit x=h+a·cos(ω), y=k+b·sin(ω) by normal equations
+    const pts=boundary.length>=6?boundary:pixels;
+    let n=0,sC=0,sC2=0,sXC=0,sX=0,sS=0,sS2=0,sYS=0,sY=0;
+    for(const idx of pts){
+      const px=idx%w,py=(idx/w)|0;
+      const omega=Math.atan2(py-cy,px-cx);
+      const co=Math.cos(omega),si=Math.sin(omega);
+      sC+=co;sC2+=co*co;sXC+=px*co;sX+=px;
+      sS+=si;sS2+=si*si;sYS+=py*si;sY+=py;
+      n++;
+    }
+    if(n<4) continue;
+    const detX=n*sC2-sC*sC, detY=n*sS2-sS*sS;
+    if(Math.abs(detX)<1e-6||Math.abs(detY)<1e-6) continue;
+    const a=Math.abs((n*sXC-sX*sC)/detX);
+    const b=Math.abs((n*sYS-sY*sS)/detY);
+    if(a<0.5||b<0.5) continue;
+    const circ=Math.min(a,b)/Math.max(a,b);
+    if(circ>bestCirc){bestCirc=circ;bestR=Math.sqrt(a*b);}
+  }
+  return bestR;
 }
 
 /* ── Otsu threshold from pixel histogram ───────────────────────────────────
