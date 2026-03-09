@@ -1320,40 +1320,7 @@ function getEyeImageData(ctx,center,irisR,W,H){
   catch(_){return null;}
 }
 
-/* ── Method 1: Custom Radial Scan ──────────────────────────────────────────
-   Empirical radial brightness scan adapted from Starburst (Li et al., 2005,
-   IEEE CVPR Workshops, doi:10.1109/CVPR.2005.531). Threshold set at 40%
-   between pupil-centre darkness and iris-rim brightness (ad-hoc, not from
-   a published source — compare with SET and Otsu for validation). */
-function pupilRadiusByScan(ed){
-  if(!ed) return ed?.r*0.32||2;
-  const{data,w,h,lcx,lcy,r}=ed;
-  let rimB=0,rimN=0;
-  for(let a=0;a<360;a+=20){
-    const rad=a*Math.PI/180;
-    const rx=Math.round(lcx+r*0.78*Math.cos(rad)),ry=Math.round(lcy+r*0.78*Math.sin(rad));
-    if(rx>=0&&rx<w&&ry>=0&&ry<h){const i=(ry*w+rx)*4;rimB+=(data[i]+data[i+1]+data[i+2])/3;rimN++;}
-  }
-  rimB=rimN>0?rimB/rimN:128;
-  const ci=(lcy*w+lcx)*4;
-  const cB=(data[ci]+data[ci+1]+data[ci+2])/3;
-  const thresh=cB+(rimB-cB)*0.40;
-  let totR=0,n=0;
-  for(let a=0;a<360;a+=15){
-    const rad=a*Math.PI/180;
-    for(let d=1;d<=r;d++){
-      const rx=Math.round(lcx+d*Math.cos(rad)),ry=Math.round(lcy+d*Math.sin(rad));
-      if(rx<0||rx>=w||ry<0||ry>=h){totR+=d-1;n++;break;}
-      const i=(ry*w+rx)*4;
-      const b=(data[i]+data[i+1]+data[i+2])/3;
-      if(b>=thresh){totR+=d;n++;break;}
-      if(d===r){totR+=r*0.85;n++;}
-    }
-  }
-  return n>0?totR/n:r*0.32;
-}
-
-/* ── Method 2: SET (Sinusoidal Eye-Tracker) ────────────────────────────────
+/* ── Method 1: SET (Sinusoidal Eye-Tracker) ────────────────────────────────
    Binary threshold T=30, min region 600px (on 640×480 full frame).
    Reference: Javadi et al. (2015), "SET: a pupil detection method using
    sinusoidal approximation", Frontiers in Neuroengineering,
@@ -1456,19 +1423,15 @@ function estimatePupilPIR(){
   const led=getEyeImageData(ctx,lc,lIR,W,H), red=getEyeImageData(ctx,rc,rIR,W,H);
   const clip=v=>Math.min(0.92,Math.max(0.05,v));
   const avgIR=(lIR+rIR)/2;
-  const avgPR      =(pupilRadiusByScan(led) +pupilRadiusByScan(red)) /2;
   const avgPR_SET  =(pupilRadiusBySET(led)  +pupilRadiusBySET(red))  /2;
   const avgPR_Otsu =(pupilRadiusByOtsu(led) +pupilRadiusByOtsu(red)) /2;
   const pirSET=clip(avgPR_SET/avgIR);
   const pirOtsu=clip(avgPR_Otsu/avgIR);
   return{
-    // keep radial as optional comparison output
     pir:pirSET,
-    pirRadial:clip(avgPR/avgIR),
     pirSET,
     pirOtsu,
     pupilPx:+avgPR_SET.toFixed(2),
-    pupilPxRadial:+avgPR.toFixed(2),
     pupilPxSET:+avgPR_SET.toFixed(2),
     pupilPxOtsu:+avgPR_Otsu.toFixed(2),
     irisPx:+avgIR.toFixed(2),
