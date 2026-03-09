@@ -1467,9 +1467,9 @@ function estimatePupilPIR(){
   ctx.drawImage(videoEl,0,0,W,H);
   const led=getEyeImageData(ctx,lc,lIR,W,H), red=getEyeImageData(ctx,rc,rIR,W,H);
   const clip=v=>Math.min(0.92,Math.max(0.05,v));
-  const avgIR=(lIR+rIR)/2;
-  const avgPR_SET  =(pupilRadiusBySET(led)  +pupilRadiusBySET(red))  /2;
-  const avgPR_Otsu =(pupilRadiusByOtsu(led) +pupilRadiusByOtsu(red)) /2;
+  const avgIR      = lIR+rIR;                                       // avg iris diameter (px)
+  const avgPR_SET  = pupilRadiusBySET(led)  +pupilRadiusBySET(red);  // avg pupil diameter (px)
+  const avgPR_Otsu = pupilRadiusByOtsu(led) +pupilRadiusByOtsu(red); // avg pupil diameter (px)
   const pirSET=clip(avgPR_SET/avgIR);
   const pirOtsu=clip(avgPR_Otsu/avgIR);
   return{
@@ -1545,7 +1545,7 @@ function runExp4Phase(idx){
     const pupilMmOtsu=+(exp4PupilPxOtsuSm*mmPerPx).toFixed(2);
     exp4PhaseData[idx].samples.push({t,pir:+exp4PirSETSm.toFixed(4),pirSET:+exp4PirSETSm.toFixed(4),pirOtsu:+exp4PirOtsuSm.toFixed(4),irisMm,pupilMm:pupilMmSET,pupilMmSET,pupilMmOtsu});
     document.getElementById('exp4-pir').textContent=`S:${exp4PirSETSm.toFixed(3)} | O:${exp4PirOtsuSm.toFixed(3)}`;
-    document.getElementById('exp4-mm').textContent=`S:${pupilMmSET.toFixed(1)} · O:${pupilMmOtsu.toFixed(1)} mm · Iris:${irisMm}mm`;
+    document.getElementById('exp4-mm').textContent=`S:${pupilMmSET.toFixed(1)} · O:${pupilMmOtsu.toFixed(1)} mm diam · Iris:${irisMm}mm diam`;
   },100);
   setTimeout(()=>{
     clearInterval(exp4SampleId);clearInterval(exp4TaskId);
@@ -1623,7 +1623,7 @@ function runExp5Phase(idx){
     const pupilMmOtsu=+(exp5PupilPxOtsuSm*mmPerPx).toFixed(2);
     exp5PhaseData[idx].samples.push({t,pir:+exp5PirSETSm.toFixed(4),pirSET:+exp5PirSETSm.toFixed(4),pirOtsu:+exp5PirOtsuSm.toFixed(4),irisMm,pupilMm:pupilMmSET,pupilMmSET,pupilMmOtsu});
     document.getElementById('exp5-pir').textContent=`S:${exp5PirSETSm.toFixed(3)} | O:${exp5PirOtsuSm.toFixed(3)}`;
-    document.getElementById('exp5-mm').textContent=`S:${pupilMmSET.toFixed(1)} · O:${pupilMmOtsu.toFixed(1)} mm · Iris:${irisMm}mm`;
+    document.getElementById('exp5-mm').textContent=`S:${pupilMmSET.toFixed(1)} · O:${pupilMmOtsu.toFixed(1)} mm diam · Iris:${irisMm}mm diam`;
   },100);
   setTimeout(()=>{
     clearInterval(exp5SampleId);
@@ -2032,10 +2032,10 @@ function buildPirChart(phases){
       {label:'PIR — Otsu',data:datasetPirOtsu,yAxisID:'y',
         borderColor:'#3fb950',backgroundColor:'transparent',
         borderWidth:2,pointRadius:0,tension:0.3,fill:false},
-      {label:'Pupil mm — SET',data:datasetPupilMmSET,yAxisID:'y1',
+      {label:'Pupil diam (mm) — SET',data:datasetPupilMmSET,yAxisID:'y1',
         borderColor:'#f0c000',backgroundColor:'transparent',
         borderWidth:1,pointRadius:0,tension:0.3,borderDash:[2,3]},
-      {label:'Pupil mm — Otsu',data:datasetPupilMmOtsu,yAxisID:'y1',
+      {label:'Pupil diam (mm) — Otsu',data:datasetPupilMmOtsu,yAxisID:'y1',
         borderColor:'#3fb950',backgroundColor:'transparent',
         borderWidth:1,pointRadius:0,tension:0.3,borderDash:[3,3]},
       {label:'Iris (mm, reference)',data:datasetIrisMm,yAxisID:'y1',
@@ -2073,7 +2073,7 @@ function buildPhaseSummaryCards(phases){
     const irisMmVal=ph.meanIrisMm!=null?ph.meanIrisMm:IRIS_REAL_MM;
     el.innerHTML=`<div class="mc-label" style="color:${c}">${ph.label}</div>
       <table class="tbl" style="margin-top:8px;font-size:.75rem">
-        <thead><tr><th>Method</th><th>PIR</th><th>Pupil mm</th></tr></thead>
+        <thead><tr><th>Method</th><th>PIR</th><th>Pupil diam (mm)</th></tr></thead>
         <tbody>
           <tr><td style="color:#f0c000">SET</td><td>${pirS!=null?pirS.toFixed(3):'–'}</td><td>${pupilMmS!=null?pupilMmS.toFixed(2)+' mm':'–'}</td></tr>
           <tr><td style="color:#3fb950">Otsu</td><td>${pirO!=null?pirO.toFixed(3):'–'}</td><td>${pupilMmO!=null?pupilMmO.toFixed(2)+' mm':'–'}</td></tr>
@@ -2108,7 +2108,7 @@ function renderResultsExp4(run,timeStr){
       : 'Not detected — no significant difference in SET/Otsu')
     : '–';
   let tbl=`<table class="tbl" style="max-width:720px"><thead><tr>
-    <th>Phase</th><th>SET PIR</th><th>Otsu PIR</th><th>Pupil mm (SET)</th><th>Pupil mm (Otsu)</th><th>Iris (mm)</th><th>Expected</th></tr></thead><tbody>`;
+    <th>Phase</th><th>SET PIR</th><th>Otsu PIR</th><th>Pupil diam (mm) SET</th><th>Pupil diam (mm) Otsu</th><th>Iris diam (mm)</th><th>Expected</th></tr></thead><tbody>`;
   rows.forEach(r=>{
     const pirSET=r.meanSET??r.mean;
     const pirOtsu=r.meanOtsu??r.mean;
@@ -2147,7 +2147,7 @@ function renderResultsExp5(run,timeStr){
     {phase:'Dark (black)',    mean:dark?.mean, meanSET:dark?.meanSET, meanOtsu:dark?.meanOtsu, meanMm:dark?.meanMm, meanMmSET:dark?.meanMmSET, meanMmOtsu:dark?.meanMmOtsu, meanIrisMm:dark?.meanIrisMm, expected:'↑ dilation'},
   ];
   let tbl=`<table class="tbl" style="max-width:800px"><thead><tr>
-    <th>Phase</th><th>SET PIR</th><th>Otsu PIR</th><th>Pupil mm (SET)</th><th>Pupil mm (Otsu)</th><th>Iris (mm)</th><th>Expected</th></tr></thead><tbody>`;
+    <th>Phase</th><th>SET PIR</th><th>Otsu PIR</th><th>Pupil diam (mm) SET</th><th>Pupil diam (mm) Otsu</th><th>Iris diam (mm)</th><th>Expected</th></tr></thead><tbody>`;
   rows.forEach(r=>{
     const pirSET=r.meanSET??r.mean;
     const pirOtsu=r.meanOtsu??r.mean;
@@ -2287,7 +2287,7 @@ function saveResults(){
   if(latestRun){
     let csv='';
     if(latestRun.experimentType===4||latestRun.experimentType===5){
-      csv='Phase,Duration_s,PIR_SET,PIR_Otsu,PupilMm_SET,PupilMm_Otsu,IrisMm,Samples\n';
+      csv='Phase,Duration_s,PIR_SET,PIR_Otsu,PupilDiamMm_SET,PupilDiamMm_Otsu,IrisDiamMm,Samples\n';
       latestRun.phases.forEach(ph=>{
         const pirSET=ph.meanSET!=null?ph.meanSET:ph.mean;
         const pirOtsu=ph.meanOtsu!=null?ph.meanOtsu:ph.mean;
