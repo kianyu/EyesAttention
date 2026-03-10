@@ -944,7 +944,7 @@ function showReadyPhase(){
       <li>Reporting metric: <span style="color:#e6edf3">SET PIR and Otsu PIR shown separately</span></li>
       <li>References:
         <a href="https://doi.org/10.3389/fneng.2015.00004" target="_blank" style="color:#58a6ff">SET (T=30, min area=600)</a>,
-        <a href="https://doi.org/10.1109/TSMC.1979.4310076" target="_blank" style="color:#58a6ff">Otsu thresholding</a>,
+        <a href="https://www.mdpi.com/1424-8220/15/12/29792" target="_blank" style="color:#58a6ff">Otsu thresholding</a>,
         <a href="https://research.google/blog/mediapipe-iris-real-time-iris-tracking-depth-estimation/" target="_blank" style="color:#58a6ff">MediaPipe iris landmarks</a>
       </li>
     </ul>
@@ -1279,7 +1279,7 @@ function collectGazeSampleExp3(){
   const t=(performance.now()-exp3DirStart-EXP3_SKIP_MS)/1000;
   if(!currentLM){
     // No face detected — count as off-screen for all methods
-    METHODS.forEach(m=>exp3Samples[m].push({t,x:-1,y:-1,noFace:true}));
+    METHODS.forEach(m=>exp3Samples[m].push({t,x:-100,y:-100,noFace:true}));
     updateGazeDot(null,null,null);
     return;
   }
